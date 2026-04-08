@@ -11,6 +11,7 @@ const double sound_velocity = 6.8e3 * units::m / units::s;      // sound velocit
 const double acoustic_deformation_potential = 4.9 * units::eV; // acoustic deformation potential, средний по двум напрпавлениям
 const double Delta = 1.0 * units::eV; // полуширина запрещённой зоны
 const double Lx = 1.0 * units::um; // размер области
+const int Nx = 100 // количество бинов
 
 struct AcousticScattering : public Scattering {
   double constant;  // (8π D_a² kT)/(h² ℏ ρ s²)
@@ -118,7 +119,8 @@ int main(int argc, char const *argv[]) {
     1.285 * consts::me, // mx (ZZ)
     0.125 * consts::me, // my (AC)
     Delta,
-    Lx
+    Lx,
+    Nx
   };
   
   // Вектор механизмов рассеяния

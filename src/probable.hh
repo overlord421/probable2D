@@ -61,9 +61,11 @@ struct Material {
   double mx, my;        // эффективные массы по осям
   double Delta;         // полуширина запрещённой зоны
   double Lx;            // размер области по x
+  int Nx;               // количество ячеек
+  double cell_size;     // Lx / Nx
   
-  Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0) 
-    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_) {}
+  Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0, int Nx_ = 1) 
+    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Nx(Nx_), cell_size(Lx_ / Nx_) {}
   
   double energy(const Vec2 &p) const {
     // ϵ(p) = √((Δ p_x²)/m_x + (Δ + p_y²/(2m_y))²)
@@ -89,6 +91,13 @@ struct Material {
     if (x < 0) return -x;           // отражение от левой границы
     if (x > Lx) return 2*Lx - x;    // отражение от правой границы
     return x;
+  }
+  
+  // получение индекса ячейки
+  int get_cell_index(double x) const {
+    if (x <= 0) return 0;
+    if (x >= Lx) return Nx - 1;
+    return static_cast<int>(x / cell_size);
   }
 };
 
