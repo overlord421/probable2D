@@ -10,6 +10,7 @@ const double density = 1.4e-3 * units::g / pow(units::m, 2);     // density
 const double sound_velocity = 6.8e3 * units::m / units::s;      // sound velocity
 const double acoustic_deformation_potential = 4.9 * units::eV; // acoustic deformation potential, средний по двум напрпавлениям
 const double Delta = 1.0 * units::eV; // полуширина запрещённой зоны
+const double Lx = 1.0 * units::um; // размер области
 
 struct AcousticScattering : public Scattering {
   double constant;  // (8π D_a² kT)/(h² ℏ ρ s²)
@@ -116,7 +117,8 @@ int main(int argc, char const *argv[]) {
   Material phosphorene{
     1.285 * consts::me, // mx (ZZ)
     0.125 * consts::me, // my (AC)
-    Delta
+    Delta,
+    Lx
   };
   
   // Вектор механизмов рассеяния
@@ -139,6 +141,7 @@ int main(int argc, char const *argv[]) {
 
   // print info on stdout
   std::cout << "Ensemble size:    " << ensemble_size << "\n";
+  std::cout << "Sample length:    " << Lx / units::m << "\n";
   std::cout << "Time step:        " << time_step / units::s << " s\n";
   std::cout << "Simulation time:  " << all_time / units::s << " s\n";
   std::cout << "Temperature:      " << temperature / units::K << " K\n";

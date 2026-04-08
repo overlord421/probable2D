@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <vec2.hh>
+#include <position.hh>
 
 namespace units {
 // energy
@@ -59,9 +60,10 @@ namespace probable {
 struct Material {
   double mx, my;        // эффективные массы по осям
   double Delta;         // полуширина запрещённой зоны
+  double Lx;            // размер области по x
   
-  Material(double mx_, double my_, double Delta_ = 0) 
-    : mx(mx_), my(my_), Delta(Delta_) {}
+  Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0) 
+    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_) {}
   
   double energy(const Vec2 &p) const {
     // ϵ(p) = √((Δ p_x²)/m_x + (Δ + p_y²/(2m_y))²)
@@ -77,6 +79,17 @@ struct Material {
   }
   
   Vec2 create_particle(double temperature) const;
+  
+  Pos1D create_initial_position() const {
+    return {uniform() * Lx};  // равномерно от 0 до Lx
+  }
+  
+  // Отражающие граничные условия
+  double apply_boundary(double x) const {
+    if (x < 0) return -x;           // отражение от левой границы
+    if (x > Lx) return 2*Lx - x;    // отражение от правой границы
+    return x;
+  }
 };
 
 struct Scattering {
@@ -103,9 +116,10 @@ enum DumpFlags {
   time = number << 1,
   momentum = time << 1,
   energy = momentum << 1,
-  velocity = energy << 1,
+  position = energy << 1,
+  velocity = position << 1,
   scattering = velocity << 1,
-  all = number | time | momentum | energy | velocity | scattering,
+  all = number | time | momentum | energy | velocity | position | scattering,
   // frequency
   // without this flag it will dump on every step
   on_scatterings = scattering << 1,
@@ -122,6 +136,7 @@ struct Results {
   std::vector<Vec2> velocities;
   std::vector<double> energies;
   std::vector<uint32_t> scatterings;
+  std::vector<double> positions;
   Results() {}
   Results(size_t cap, DumpFlags flags = DumpFlags::none)
       : size(0), flags(flags), ns(), ts(), momentums(), velocities(), energies(), scatterings() {
@@ -132,7 +147,7 @@ struct Results {
     energies.reserve(cap);
     scatterings.reserve(cap);
   }
-  void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s);
+  void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x);
   friend std::ostream &operator<<(std::ostream &s, const Results &r);
 };
 

@@ -36,7 +36,7 @@ Vec2 Scattering::scatter(const Vec2 &p) const {
   return {p0 * cos(phi), p0 * sin(phi)};
 }
 
-void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s) {
+void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x) {
   average_velocity += (v - average_velocity) / (n + 1);
   if (s) {
     scattering_count[s - 1] += 1;
@@ -59,6 +59,9 @@ void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double 
     }
     if (flags & DumpFlags::energy) {
       energies.push_back(e);
+    }
+    if (flags & DumpFlags::position) {
+      positions.push_back(x);
     }
     size += 1;
   }
@@ -88,6 +91,9 @@ std::ostream &operator<<(std::ostream &s, const Results &r) {
     if (r.flags & DumpFlags::energy) {
       s << r.energies[i] / units::eV << " ";
     }
+    if (r.flags & DumpFlags::position) {
+      s << r.positions[i] / units::m << " ";
+    }
     if (r.flags & DumpFlags::scattering) {
       s << r.scatterings[i];
     }
@@ -116,6 +122,7 @@ std::vector<Results> simulate(const Material &material,
     }
     result.average_velocity = {0, 0};
     result.scattering_count.assign(mechanisms.size(), 0);
+    Pos1D x = material.create_initial_position();
     Vec2 p = material.create_particle(temperature);
     std::vector<double> free_flight(mechanisms.size(), 0);
     for (double &l : free_flight) {
@@ -137,8 +144,10 @@ std::vector<Results> simulate(const Material &material,
         }
       }
       
-      result.append(j, j * time_step, p_, v, e, scattering_mechanism);      
+      result.append(j, j * time_step, p_, v, e, scattering_mechanism, x.x);      
       if (not scattering_mechanism) {
+        x.x += v.x * time_step;  // обновляем позицию
+        x.x = material.apply_boundary(x.x);  // применяем граничные условия
         // Для B, направленного перпендикулярно плоскости (только Bz):
         p += -consts::e * (electric_field + v.cross_with_B(magnetic_field_z)) * time_step;
       }
