@@ -6,13 +6,14 @@
 
 namespace probable {
 
-Vec2 Material::create_particle(double temperature) const {
+Vec2 Material::create_particle() const {
+  double T_avg = (T_left + T_right) / 2;
   double m_eff = (mx + my) / 2;
-  double p_max = 5 * sqrt(2 * m_eff * consts::kB * temperature);
+  double p_max = 5 * sqrt(2 * m_eff * consts::kB * T_avg);
   while (true) {
     double prob = uniform();
     double p1 = p_max * sqrt(uniform());  // ИЗМЕНИЛИ cbrt на sqrt для !СОМНЕНИЕ!
-    if (prob < exp(-p1 * p1 / (2 * m_eff * consts::kB * temperature))) {
+    if (prob < exp(-p1 * p1 / (2 * m_eff * consts::kB * T_avg))) {
       // В 2D только угол φ (от 0 до 2π)
       double phi = 2 * math::pi * uniform();
       Vec2 p = {p1 * cos(phi), p1 * sin(phi)};
@@ -104,7 +105,6 @@ std::ostream &operator<<(std::ostream &s, const Results &r) {
 
 std::vector<Results> simulate(const Material &material,
                               const std::vector<Scattering *> mechanisms,
-                              double temperature,
                               const Vec2 &electric_field,
                               double magnetic_field_z,
                               double time_step,
@@ -123,7 +123,7 @@ std::vector<Results> simulate(const Material &material,
     result.average_velocity = {0, 0};
     result.scattering_count.assign(mechanisms.size(), 0);
     Pos1D x = material.create_initial_position();
-    Vec2 p = material.create_particle(temperature);
+    Vec2 p = material.create_particle();
     std::vector<double> free_flight(mechanisms.size(), 0);
     for (double &l : free_flight) {
       l = -log(uniform());
@@ -135,7 +135,7 @@ std::vector<Results> simulate(const Material &material,
       double e = material.energy(p_);
       size_t scattering_mechanism = 0; // means no scattering
       for (size_t k = 0; k < mechanisms.size(); ++k) {
-        free_flight[k] -= mechanisms[k]->rate(p_) * time_step;
+        free_flight[k] -= mechanisms[k]->rate(p_, x.x) * time_step;
         if (free_flight[k] < 0) {
           p = mechanisms[k]->scatter(p_);
           free_flight[k] = -log(uniform());

@@ -58,14 +58,17 @@ const double pi = acos(-1);
 namespace probable {
 
 struct Material {
-  double mx, my;        // эффективные массы по осям
-  double Delta;         // полуширина запрещённой зоны
-  double Lx;            // размер области по x
-  int Nx;               // количество ячеек
-  double cell_size;     // Lx / Nx
+  double mx, my;             // эффективные массы по осям
+  double Delta;              // полуширина запрещённой зоны
+  double Lx;                 // размер области по x
+  int Nx;                    // количество ячеек
+  double cell_size;          // Lx / Nx
+  double T_left, T_right;    // Температура на краях
   
-  Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0, int Nx_ = 1) 
-    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Nx(Nx_), cell_size(Lx_ / Nx_) {}
+  Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0, 
+           int Nx_ = 1, double T_l = 0, double T_r = 0) 
+    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Nx(Nx_), cell_size(Lx_ / Nx_), 
+      T_left(T_l), T_right(T_r) {}
   
   double energy(const Vec2 &p) const {
     // ϵ(p) = √((Δ p_x²)/m_x + (Δ + p_y²/(2m_y))²)
@@ -80,7 +83,7 @@ struct Material {
     return {vx, vy};
   }
   
-  Vec2 create_particle(double temperature) const;
+  Vec2 create_particle() const;
   
   Pos1D create_initial_position() const {
     return {uniform() * Lx};  // равномерно от 0 до Lx
@@ -99,13 +102,17 @@ struct Material {
     if (x >= Lx) return Nx - 1;
     return static_cast<int>(x / cell_size);
   }
+  
+  double get_temperature(double x) const {
+    return T_left + (T_right - T_left) * (x / Lx);
+  }  
 };
 
 struct Scattering {
   const Material &m;
   const double energy;
   Scattering(const Material &m, double e) : m(m), energy(e) {}
-  virtual double rate(const Vec2 &p) const = 0;
+  virtual double rate(const Vec2 &p, double x) const = 0;
   Vec2 scatter(const Vec2 &p) const;
   virtual ~Scattering() {}
 };
@@ -162,7 +169,6 @@ struct Results {
 
 std::vector<Results> simulate(const Material &material,
                               const std::vector<Scattering *> mechanisms,
-                              double temperature,
                               const Vec2 &electric_field,
                               double magnetic_field,
                               double time_step,

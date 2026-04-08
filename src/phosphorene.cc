@@ -11,24 +11,23 @@ const double sound_velocity = 6.8e3 * units::m / units::s;      // sound velocit
 const double acoustic_deformation_potential = 4.9 * units::eV; // acoustic deformation potential, средний по двум напрпавлениям
 const double Delta = 1.0 * units::eV; // полуширина запрещённой зоны
 const double Lx = 1.0 * units::um; // размер области
-const int Nx = 100 // количество бинов
+const int Nx = 100; // количество бинов
 
 struct AcousticScattering : public Scattering {
-  double constant;  // (8π D_a² kT)/(h² ℏ ρ s²)
   double Da, s;  // параметры материала
   
-  AcousticScattering(const Material &m, double temperature,
-                       double Da_, double s_)
-      : Scattering(m, 0), Da(Da_), s(s_) {
-    double kT = consts::kB * temperature;
+  AcousticScattering(const Material &m, double Da_, double s_)
+      : Scattering(m, 0), Da(Da_), s(s_) {}
     
-    // W_ac = (2 D_a² kT E)/(π ℏ³ ρ s²) * √((2 m_x m_y)/Δ(Δ+E)) * K((Δ-E)/(Δ+E))
-    // Константа без E (E будет в rate())
-    constant = 2 * Da * Da * kT / (math::pi * pow(consts::hbar, 3) * density * s * s);
-  }
-    
-  double rate(const Vec2 &p) const override {
+  double rate(const Vec2 &p, double x) const override {
     double E = m.energy(p);  // энергия частицы (с учетом анизотропии и щели)
+    double T = m.get_temperature(x);
+    double kT = consts::kB * T;
+    // W_ac = (2 D_a² kT E)/(π ℏ³ ρ s²) * √((2 m_x m_y)/Δ(Δ+E)) * K((Δ-E)/(Δ+E))
+    
+    // Константа без E (E будет в rate())
+    // (8π D_a² kT)/(h² ℏ ρ s²)
+    double constant = 2 * Da * Da * kT / (math::pi * pow(consts::hbar, 3) * density * s * s);
     
     double Dplus = m.Delta + E;
     double Dminus = m.Delta - E;
@@ -48,23 +47,19 @@ struct AcousticScattering : public Scattering {
 
 // Испускание оптического фонона
 struct OpticalEmissionScattering : public Scattering {
-  double constant;
   double Do;
   
-  OpticalEmissionScattering(const Material &m, double temperature,
-                            double Do_, double phonon_energy)
+  OpticalEmissionScattering(const Material &m, double Do_, double phonon_energy)
       : Scattering(m, phonon_energy), Do(Do_) {
-    
     double omega0 = phonon_energy / consts::hbar;
-        
+    
     // W_op = (D_o² E) / (π ℏ² ρ ω₀) * √((2 m_x m_y)/Δ(Δ+E)) * K((Δ-E)/(Δ+E))
     // Константа без E (E будет в rate())
     constant = Do * Do / (math::pi * std::pow(consts::hbar, 2) * density * omega0);
   }
   
-  double rate(const Vec2 &p) const override {
+  double rate(const Vec2 &p, double x) const override {
     double E = m.energy(p) - energy;
-    
     if (E < m.Delta) return 0;
     
     double Dplus = m.Delta + E;
@@ -102,38 +97,39 @@ template <typename T> T sum(std::vector<T> t) {
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc != 7) {
+  if (argc != 8) {
     std::cout << "Invalid number of arguments\n";
-    std::cout << "Usage: " << argv[0] << " <ensemble size> <temperature> <Ex> <Ey> <Bz> <all_time>\n";
+    std::cout << "Usage: " << argv[0] << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time>\n";
     return 1;
   }
 
   size_t ensemble_size = parse<int>(argv[1]);
-  double temperature = parse<double>(argv[2]) * units::K;
-  Vec2 electric_field{parse<double>(argv[3]) * units::V / units::m, 
-                      parse<double>(argv[4]) * units::V / units::m};
-  double magnetic_field_z = parse<double>(argv[5]) * units::T;
-  double all_time = parse<double>(argv[6]) * units::s;
+  double T_left = parse<double>(argv[2]) * units::K;
+  double T_right = parse<double>(argv[3]) * units::K;
+  Vec2 electric_field{parse<double>(argv[4]) * units::V / units::m, 
+                      parse<double>(argv[5]) * units::V / units::m};
+  double magnetic_field_z = parse<double>(argv[6]) * units::T;
+  double all_time = parse<double>(argv[7]) * units::s;
 
   Material phosphorene{
     1.285 * consts::me, // mx (ZZ)
     0.125 * consts::me, // my (AC)
     Delta,
     Lx,
-    Nx
+    Nx, 
+    T_left,
+    T_right
   };
   
   // Вектор механизмов рассеяния
   std::vector<Scattering *> mechanisms{
     new AcousticScattering(
-      phosphorene, 
-      temperature,
+      phosphorene,
       acoustic_deformation_potential,
       sound_velocity
     ),
     new OpticalEmissionScattering(
       phosphorene,
-      temperature,
       5.67e10 * units::eV / units::m, // TO2
       56e-3 * units::eV
     )
@@ -146,7 +142,8 @@ int main(int argc, char const *argv[]) {
   std::cout << "Sample length:    " << Lx / units::m << "\n";
   std::cout << "Time step:        " << time_step / units::s << " s\n";
   std::cout << "Simulation time:  " << all_time / units::s << " s\n";
-  std::cout << "Temperature:      " << temperature / units::K << " K\n";
+  std::cout << "Temperature left: " << T_left / units::K << " K\n";
+  std::cout << "Temperature right:" << T_right / units::K << " K\n";
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
   std::cout << "Magnetic field:   " << magnetic_field_z / units::T << " T\n";
   std::cout << "Scattering mechanisms:\n";
@@ -155,7 +152,6 @@ int main(int argc, char const *argv[]) {
   }
   auto results = simulate(phosphorene,
                           mechanisms,
-                          temperature,
                           electric_field,
                           magnetic_field_z,
                           time_step,
