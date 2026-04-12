@@ -11,12 +11,9 @@ Vec2 Material::create_particle() const {
   double m_eff = (mx + my) / 2;
   double p_max = 5 * sqrt(2 * m_eff * consts::kB * T_avg);
   while (true) {
-    double prob = uniform();
-    double p1 = p_max * sqrt(uniform());  // ИЗМЕНИЛИ cbrt на sqrt для !СОМНЕНИЕ!
-    if (prob < exp(-p1 * p1 / (2 * m_eff * consts::kB * T_avg))) {
-      // В 2D только угол φ (от 0 до 2π)
-      double phi = 2 * math::pi * uniform();
-      Vec2 p = {p1 * cos(phi), p1 * sin(phi)};
+    double prob = uniform() * exp(-Delta / (consts::kB * T_avg));
+    Vec2 p = {p_max * (-1 + uniform() * 2), p_max * (-1 + uniform() * 2)};
+    if (prob < exp(-energy(p) / (consts::kB * T_avg))) {      
       return p;
     }
   }
