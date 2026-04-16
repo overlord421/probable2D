@@ -90,11 +90,7 @@ struct Material {
   }
   
   // Отражающие граничные условия
-  double apply_boundary(double x) const {
-    if (x < 0) return -x;           // отражение от левой границы
-    if (x > Lx) return 2*Lx - x;    // отражение от правой границы
-    return x;
-  }
+  double apply_boundary(double &x, Vec2 &p) const;
   
   // получение индекса ячейки
   int get_cell_index(double x) const {

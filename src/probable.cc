@@ -19,6 +19,49 @@ Vec2 Material::create_particle() const {
   }
 }
 
+void Material::apply_boundary(double &x, Vec2 &p) const {
+  double T = -1;
+  double sign = 0;
+  
+  if (x < 0) {
+    x = 0;
+    T = T_left;
+    sign = 1;
+  } else if (x > Lx) {
+    x = Lx;
+    T = T_right;
+    sign = -1;
+  }
+    
+  if (T != -1) {
+    double m_eff = (mx + my) / 2;
+    double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
+    
+    double E = energy(p);
+    double Dplus = Delta + E;
+    double Dminus = Delta - E;
+    double g = 2; // спиновое вырождение
+    double sqrt_term = std::sqrt((2 * mx * my) / (Delta * Dplus));
+    // Параметр для эллиптического интеграла k = (Δ-E)/(Δ+E)
+    double k_param = Dminus / Dplus;
+    // Полный эллиптический интеграл первого рода K(k)
+    double K = std::comp_ellint_1(k_param);
+    // плотность состояний (DOS)
+    double rho = g * E * sqrt_term * K / pow(math::pi * consts::hbar, 2);
+        
+    while (true) {
+      double p_x_new = p_max * sign * uniform();
+      double prob = uniform() * exp(-Delta / (consts::kB * T));
+      
+      Vec2 p_test{p_x_new, p.y};
+      if (prob < exp(-energy(p_test) / (consts::kB * T)) * fabs(p.x) * rho) {
+        p.x = p_x_new;
+        break;
+      }
+    }
+  }
+}
+
 Vec2 Scattering::scatter(const Vec2 &p) const {
   // В 2D только угол φ
   double phi = 2 * math::pi * uniform();
@@ -144,7 +187,7 @@ std::vector<Results> simulate(const Material &material,
       result.append(j, j * time_step, p_, v, e, scattering_mechanism, x.x);      
       if (not scattering_mechanism) {
         x.x += v.x * time_step;  // обновляем позицию
-        x.x = material.apply_boundary(x.x);  // применяем граничные условия
+        material.apply_boundary(x.x, p);  // применяем граничные условия
         // Для B, направленного перпендикулярно плоскости (только Bz):
         p += -consts::e * (electric_field + v.cross_with_B(magnetic_field_z)) * time_step;
       }
