@@ -47,6 +47,7 @@ struct AcousticScattering : public Scattering {
 
 // Испускание оптического фонона
 struct OpticalEmissionScattering : public Scattering {
+  double constant;
   double Do;
   
   OpticalEmissionScattering(const Material &m, double Do_, double phonon_energy)
@@ -55,7 +56,7 @@ struct OpticalEmissionScattering : public Scattering {
     
     // W_op = (D_o² E) / (π ℏ² ρ ω₀) * √((2 m_x m_y)/Δ(Δ+E)) * K((Δ-E)/(Δ+E))
     // Константа без E (E будет в rate())
-    constant = Do * Do / (math::pi * std::pow(consts::hbar, 2) * density * omega0);
+    double constant = Do * Do / (math::pi * std::pow(consts::hbar, 2) * density * omega0);
   }
   
   double rate(const Vec2 &p, double x) const override {
@@ -157,7 +158,7 @@ int main(int argc, char const *argv[]) {
                           time_step,
                           all_time,
                           ensemble_size,
-                          DumpFlags(DumpFlags::none));
+                          DumpFlags(DumpFlags::energy_flux));
   // Обработка результатов
   Vec2 average_velocity;
   Vec2 average_velocity2;
@@ -176,6 +177,17 @@ int main(int argc, char const *argv[]) {
     }
   }
   Vec2 std_velocity = (average_velocity2 - average_velocity * average_velocity).sqrt();
+  
+  std::ofstream flux_file("../output/energy_flux_avg.txt");
+  size_t steps = results[0].energy_flux.size();
+  for (size_t j = 0; j < steps; ++j) {
+    double sum_flux = 0;
+    for (size_t i = 0; i < results.size(); ++i) {
+      sum_flux += results[i].energy_flux[j];
+    }
+    flux_file << sum_flux / results.size() / -((T_left - T_right) / Lx) << "\n";
+  }
+  flux_file.close();  
   
   std::cout << "\n===== Results =====\n";
   std::cout << "      Directions: {ZZ, AC}\n";

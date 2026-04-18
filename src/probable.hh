@@ -85,12 +85,10 @@ struct Material {
   
   Vec2 create_particle() const;
   
-  Pos1D create_initial_position() const {
-    return {uniform() * Lx};  // равномерно от 0 до Lx
-  }
+  Pos1D create_initial_position() const;
   
   // Отражающие граничные условия
-  double apply_boundary(double &x, Vec2 &p) const;
+  void apply_boundary(double &x, Vec2 &p) const;
   
   // получение индекса ячейки
   int get_cell_index(double x) const {
@@ -131,10 +129,11 @@ enum DumpFlags {
   position = energy << 1,
   velocity = position << 1,
   scattering = velocity << 1,
-  all = number | time | momentum | energy | velocity | position | scattering,
+  energy_flux = scattering << 1,
+  all = number | time | momentum | energy | velocity | position | scattering | energy_flux,
   // frequency
   // without this flag it will dump on every step
-  on_scatterings = scattering << 1,
+  on_scatterings = energy_flux << 1,
 };
 
 struct Results {
@@ -149,6 +148,7 @@ struct Results {
   std::vector<double> energies;
   std::vector<uint32_t> scatterings;
   std::vector<double> positions;
+  std::vector<double> energy_flux;
   Results() {}
   Results(size_t cap, DumpFlags flags = DumpFlags::none)
       : size(0), flags(flags), ns(), ts(), momentums(), velocities(), energies(), scatterings() {
@@ -158,8 +158,9 @@ struct Results {
     velocities.reserve(cap);
     energies.reserve(cap);
     scatterings.reserve(cap);
+    energy_flux.reserve(cap);
   }
-  void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x);
+  void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x, double flux);
   friend std::ostream &operator<<(std::ostream &s, const Results &r);
 };
 

@@ -19,6 +19,10 @@ Vec2 Material::create_particle() const {
   }
 }
 
+Pos1D Material::create_initial_position() const {
+  return {uniform() * Lx};  // равномерно от 0 до Lx
+}
+
 void Material::apply_boundary(double &x, Vec2 &p) const {
   double T = -1;
   double sign = 0;
@@ -77,7 +81,7 @@ Vec2 Scattering::scatter(const Vec2 &p) const {
   return {p0 * cos(phi), p0 * sin(phi)};
 }
 
-void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x) {
+void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x, double flux) {
   average_velocity += (v - average_velocity) / (n + 1);
   if (s) {
     scattering_count[s - 1] += 1;
@@ -103,6 +107,9 @@ void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double 
     }
     if (flags & DumpFlags::position) {
       positions.push_back(x);
+    }
+    if (flags & DumpFlags::energy_flux) {
+      energy_flux.push_back(flux);
     }
     size += 1;
   }
@@ -137,6 +144,9 @@ std::ostream &operator<<(std::ostream &s, const Results &r) {
     }
     if (r.flags & DumpFlags::scattering) {
       s << r.scatterings[i];
+    }
+    if (r.flags & DumpFlags::energy_flux) {
+      s << r.energy_flux[i] << " ";
     }
     s << "\n";
   }
@@ -184,7 +194,8 @@ std::vector<Results> simulate(const Material &material,
         }
       }
       
-      result.append(j, j * time_step, p_, v, e, scattering_mechanism, x.x);      
+      double flux = e * v.x;
+      result.append(j, j * time_step, p_, v, e, scattering_mechanism, x.x, flux);      
       if (not scattering_mechanism) {
         x.x += v.x * time_step;  // обновляем позицию
         material.apply_boundary(x.x, p);  // применяем граничные условия
