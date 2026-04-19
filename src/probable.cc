@@ -19,8 +19,8 @@ Vec2 Material::create_particle() const {
   }
 }
 
-Pos1D Material::create_initial_position() const {
-  return {uniform() * Lx};  // равномерно от 0 до Lx
+Pos2D Material::create_initial_position() const {
+  return {uniform() * Lx, uniform() * Ly};  // равномерно от 0 до Lx
 }
 
 void Material::apply_boundary(double &x, Vec2 &p) const {
@@ -172,7 +172,7 @@ std::vector<Results> simulate(const Material &material,
     }
     result.average_velocity = {0, 0};
     result.scattering_count.assign(mechanisms.size(), 0);
-    Pos1D x = material.create_initial_position();
+    Pos2D r = material.create_initial_position();
     Vec2 p = material.create_particle();
     std::vector<double> free_flight(mechanisms.size(), 0);
     for (double &l : free_flight) {
@@ -185,7 +185,7 @@ std::vector<Results> simulate(const Material &material,
       double e = material.energy(p_);
       size_t scattering_mechanism = 0; // means no scattering
       for (size_t k = 0; k < mechanisms.size(); ++k) {
-        free_flight[k] -= mechanisms[k]->rate(p_, x.x) * time_step;
+        free_flight[k] -= mechanisms[k]->rate(p_, r.x) * time_step;
         if (free_flight[k] < 0) {
           p = mechanisms[k]->scatter(p_);
           free_flight[k] = -log(uniform());
@@ -195,10 +195,13 @@ std::vector<Results> simulate(const Material &material,
       }
       
       double flux = e * v.x;
-      result.append(j, j * time_step, p_, v, e, scattering_mechanism, x.x, flux);      
+      result.append(j, j * time_step, p_, v, e, scattering_mechanism, r.x, flux);      
       if (not scattering_mechanism) {
-        x.x += v.x * time_step;  // обновляем позицию
-        material.apply_boundary(x.x, p);  // применяем граничные условия
+        r.y += v.y * time_step;
+        r.x += v.x * time_step;  // обновляем позицию
+        if (r.y < 0) r.y += material.Ly;
+        if (r.y >= material.Ly) r.y -= material.Ly;
+        material.apply_boundary(r.x, p);  // применяем граничные условия
         // Для B, направленного перпендикулярно плоскости (только Bz):
         p += -consts::e * (electric_field + v.cross_with_B(magnetic_field_z)) * time_step;
       }

@@ -3,16 +3,18 @@
 #include <cmath>
 #include <ostream>
 
-struct Pos1D {
-  double x;  // координата X
+struct Pos2D {
+  double x, y;
   
-  Pos1D& operator+=(double dx) {
-    x += dx;
+  Pos2D& operator+=(const Pos2D& other) {
+    x += other.x;
+    y += other.y;
     return *this;
   }
   
-  friend std::ostream &operator<<(std::ostream &s, const Pos1D &pos) {
-    s << "{ " << pos.x << " }";
+  friend std::ostream &operator<<(std::ostream &s, const Pos2D &pos) {
+    s << "{ " << pos.x << ", " << pos.y << " }";
     return s;
   }
 };
+

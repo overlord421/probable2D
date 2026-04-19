@@ -10,7 +10,8 @@ const double density = 1.4e-3 * units::g / pow(units::m, 2);     // density
 const double sound_velocity = 6.8e3 * units::m / units::s;      // sound velocity
 const double acoustic_deformation_potential = 4.9 * units::eV; // acoustic deformation potential, средний по двум напрпавлениям
 const double Delta = 1.0 * units::eV; // полуширина запрещённой зоны
-const double Lx = 1.0 * units::um; // размер области
+const double Lx = 300 * units::nm; // размер области
+const double Ly = 300 * units::nm;
 const int Nx = 100; // количество бинов
 
 struct AcousticScattering : public Scattering {
@@ -117,6 +118,7 @@ int main(int argc, char const *argv[]) {
     0.125 * consts::me, // my (AC)
     Delta,
     Lx,
+    Ly,
     Nx, 
     T_left,
     T_right
@@ -180,7 +182,7 @@ int main(int argc, char const *argv[]) {
   
   std::ofstream flux_file("../output/energy_flux_avg.txt");
   size_t steps = results[0].energy_flux.size();
-  for (size_t j = 0; j < steps; ++j) {
+  for (size_t j = 0; j < steps; j += 100) {
     double sum_flux = 0;
     for (size_t i = 0; i < results.size(); ++i) {
       sum_flux += results[i].energy_flux[j];

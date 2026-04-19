@@ -60,15 +60,15 @@ namespace probable {
 struct Material {
   double mx, my;             // эффективные массы по осям
   double Delta;              // полуширина запрещённой зоны
-  double Lx;                 // размер области по x
+  double Lx, Ly;             // размеры области
   int Nx;                    // количество ячеек
   double cell_size;          // Lx / Nx
   double T_left, T_right;    // Температура на краях
   
   Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0, 
-           int Nx_ = 1, double T_l = 0, double T_r = 0) 
-    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Nx(Nx_), cell_size(Lx_ / Nx_), 
-      T_left(T_l), T_right(T_r) {}
+           double Ly_ = 0, int Nx_ = 1, double T_l = 0, double T_r = 0) 
+    : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Ly(Ly_), Nx(Nx_), 
+      cell_size(Lx_ / Nx_), T_left(T_l), T_right(T_r) {}
   
   double energy(const Vec2 &p) const {
     // ϵ(p) = √((Δ p_x²)/m_x + (Δ + p_y²/(2m_y))²)
@@ -85,7 +85,7 @@ struct Material {
   
   Vec2 create_particle() const;
   
-  Pos1D create_initial_position() const;
+  Pos2D create_initial_position() const;
   
   // Отражающие граничные условия
   void apply_boundary(double &x, Vec2 &p) const;
