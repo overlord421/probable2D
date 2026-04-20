@@ -57,7 +57,7 @@ struct OpticalEmissionScattering : public Scattering {
     
     // W_op = (D_o² E) / (π ℏ² ρ ω₀) * √((2 m_x m_y)/Δ(Δ+E)) * K((Δ-E)/(Δ+E))
     // Константа без E (E будет в rate())
-    double constant = Do * Do / (math::pi * std::pow(consts::hbar, 2) * density * omega0);
+    constant = Do * Do / (math::pi * std::pow(consts::hbar, 2) * density * omega0);
   }
   
   double rate(const Vec2 &p, double x) const override {
@@ -142,7 +142,8 @@ int main(int argc, char const *argv[]) {
 
   // print info on stdout
   std::cout << "Ensemble size:    " << ensemble_size << "\n";
-  std::cout << "Sample length:    " << Lx / units::m << "\n";
+  std::cout << "X length:         " << Lx / units::m << " m\n";
+  std::cout << "Y length:         " << Ly / units::m << " m\n";
   std::cout << "Time step:        " << time_step / units::s << " s\n";
   std::cout << "Simulation time:  " << all_time / units::s << " s\n";
   std::cout << "Temperature left: " << T_left / units::K << " K\n";
@@ -180,6 +181,7 @@ int main(int argc, char const *argv[]) {
   }
   Vec2 std_velocity = (average_velocity2 - average_velocity * average_velocity).sqrt();
   
+  // сохранение потока энергии в файл
   std::ofstream flux_file("../output/energy_flux_avg.txt");
   size_t steps = results[0].energy_flux.size();
   for (size_t j = 0; j < steps; j += 100) {
@@ -190,6 +192,15 @@ int main(int argc, char const *argv[]) {
     flux_file << sum_flux / results.size() / -((T_left - T_right) / Lx) << "\n";
   }
   flux_file.close();  
+  
+  // сохранение начальных энергий частиц
+//   std::ofstream energy_file("../output/initial_energy.txt");
+//   for (size_t i = 0; i < results.size(); ++i) {
+//     if (!results[i].energies.empty()) {
+//       energy_file << results[i].energies[0] / units::eV << "\n";
+//     }
+//   }
+//   energy_file.close();
   
   std::cout << "\n===== Results =====\n";
   std::cout << "      Directions: {ZZ, AC}\n";
