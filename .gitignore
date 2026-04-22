@@ -6,7 +6,7 @@ examples
 src/orig
 LICENSE
 meson.build
+.clang-format
 output
 *.png
-readme.md
 tests
