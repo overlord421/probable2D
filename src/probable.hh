@@ -102,6 +102,8 @@ struct Material {
   }
   
   Vec2 create_particle() const;
+
+  Vec2 create_particle_at_temperature(double T) const;
   
   Pos2D create_initial_position() const;
   

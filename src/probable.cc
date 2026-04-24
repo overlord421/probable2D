@@ -10,12 +10,16 @@ namespace probable {
 
 Vec2 Material::create_particle() const {
   double T_avg = (T_left + T_right) / 2;
+  return create_particle_at_temperature(T_avg);
+}
+
+Vec2 Material::create_particle_at_temperature(double T) const {
   double m_eff = (mx + my) / 2;
-  double p_max = 5 * sqrt(2 * m_eff * consts::kB * T_avg);
+  double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
   while (true) {
-    double prob = uniform() * exp(-Delta / (consts::kB * T_avg));
+    double prob = uniform() * exp(-Delta / (consts::kB * T));
     Vec2 p = {p_max * (-1 + uniform() * 2), p_max * (-1 + uniform() * 2)};
-    if (prob < exp(-energy(p) / (consts::kB * T_avg))) {      
+    if (prob < exp(-energy(p) / (consts::kB * T))) {      
       return p;
     }
   }
@@ -242,7 +246,7 @@ std::vector<Results> simulate(const Material &material,
     result.bin_excess_energy.assign(material.Nx, 0);
     result.bin_samples.assign(material.Nx, 0);
     Pos2D r = material.create_initial_position();
-    Vec2 p = material.create_particle();
+    Vec2 p = material.create_particle_at_temperature(material.get_temperature(r.x));
     std::vector<double> free_flight(mechanisms.size(), 0);
     for (double &l : free_flight) {
       l = -log(uniform());
