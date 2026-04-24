@@ -9,3 +9,6 @@ Build:
 
 Portable build without OpenMP:
 `g++ -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`
+
+The reworked kappa branch also writes `output/local_temperature_profile.txt`
+with the measured temperature profile reconstructed from binned carrier energy.

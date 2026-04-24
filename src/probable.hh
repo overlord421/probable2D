@@ -117,7 +117,11 @@ struct Material {
   
   double get_temperature(double x) const {
     return T_left + (T_right - T_left) * (x / Lx);
-  }  
+  }
+
+  double mean_excess_energy_at_temperature(double T) const;
+  
+  double temperature_from_mean_excess_energy(double mean_excess, double T_min, double T_max) const;
 };
 
 struct Scattering {
@@ -169,6 +173,8 @@ struct Results {
   std::vector<double> positions;
   std::vector<double> heat_flux;
   std::vector<double> particle_flux;
+  std::vector<double> bin_excess_energy;
+  std::vector<uint64_t> bin_samples;
   Results() {}
   Results(size_t cap, DumpFlags flags = DumpFlags::none)
       : size(0), flags(flags), ns(), ts(), momentums(), velocities(), energies(), scatterings() {

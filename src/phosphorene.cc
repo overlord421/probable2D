@@ -1,5 +1,6 @@
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -172,6 +173,8 @@ int main(int argc, char const *argv[]) {
   double avg_heat_flux = 0;
   double avg_particle_flux = 0;
   size_t flux_samples = 0;
+  std::vector<double> bin_excess_energy(Nx, 0);
+  std::vector<uint64_t> bin_samples(Nx, 0);
   
   for (std::size_t i = 0; i < results.size(); ++i) {
     average_velocity += (results[i].average_velocity - average_velocity) / (i + 1);
@@ -187,6 +190,10 @@ int main(int argc, char const *argv[]) {
       avg_heat_flux += results[i].heat_flux[j];
       avg_particle_flux += results[i].particle_flux[j];
       flux_samples += 1;
+    }
+    for (std::size_t j = 0; j < results[i].bin_excess_energy.size(); ++j) {
+      bin_excess_energy[j] += results[i].bin_excess_energy[j];
+      bin_samples[j] += results[i].bin_samples[j];
     }
   }
   if (flux_samples > 0) {
@@ -214,6 +221,25 @@ int main(int argc, char const *argv[]) {
     flux_file << j << " " << heat_flux_2d << " " << particle_flux_2d << " " << kappa_2d << "\n";
   }
   flux_file.close();  
+
+  std::ofstream temp_file("../output/local_temperature_profile.txt");
+  double T_min = 1 * units::K;
+  double T_max = 3 * std::max(T_left, T_right);
+  temp_file << "# x_m prescribed_T_K mean_excess_eV measured_T_K samples\n";
+  for (int bin = 0; bin < Nx; ++bin) {
+    double x_center = (bin + 0.5) * phosphorene.cell_size;
+    double prescribed_T = phosphorene.get_temperature(x_center);
+    double mean_excess = bin_samples[bin] > 0 ? bin_excess_energy[bin] / bin_samples[bin] : 0;
+    double measured_T = bin_samples[bin] > 0
+        ? phosphorene.temperature_from_mean_excess_energy(mean_excess, T_min, T_max)
+        : 0;
+    temp_file << x_center / units::m << " "
+              << prescribed_T / units::K << " "
+              << mean_excess / units::eV << " "
+              << measured_T / units::K << " "
+              << bin_samples[bin] << "\n";
+  }
+  temp_file.close();
   
   // сохранение начальных энергий частиц
 //   std::ofstream energy_file("../output/initial_energy.txt");

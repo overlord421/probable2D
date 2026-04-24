@@ -65,6 +65,53 @@ void Material::apply_boundary(double &x, Vec2 &p) const {
   }
 }
 
+double Material::mean_excess_energy_at_temperature(double T) const {
+  double m_eff = (mx + my) / 2;
+  double p_max = 6 * sqrt(2 * m_eff * consts::kB * T);
+  const int grid = 72;
+  double weighted_energy = 0;
+  double weight_sum = 0;
+
+  for (int ix = 0; ix < grid; ++ix) {
+    double px = p_max * (-1 + 2.0 * (ix + 0.5) / grid);
+    for (int iy = 0; iy < grid; ++iy) {
+      double py = p_max * (-1 + 2.0 * (iy + 0.5) / grid);
+      Vec2 p{px, py};
+      double E = energy(p);
+      double weight = std::exp(-E / (consts::kB * T));
+      weighted_energy += (E - Delta) * weight;
+      weight_sum += weight;
+    }
+  }
+
+  if (weight_sum == 0) {
+    return 0;
+  }
+  return weighted_energy / weight_sum;
+}
+
+double Material::temperature_from_mean_excess_energy(double mean_excess, double T_min, double T_max) const {
+  if (mean_excess <= 0) {
+    return T_min;
+  }
+
+  double high = T_max;
+  for (int i = 0; i < 8 && mean_excess_energy_at_temperature(high) < mean_excess; ++i) {
+    high *= 2;
+  }
+
+  double low = T_min;
+  for (int i = 0; i < 48; ++i) {
+    double mid = 0.5 * (low + high);
+    if (mean_excess_energy_at_temperature(mid) < mean_excess) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return 0.5 * (low + high);
+}
+
 Vec2 Scattering::scatter(const Vec2 &p) const {
   // В 2D только угол φ
   double phi = 2 * math::pi * uniform();
@@ -184,6 +231,8 @@ std::vector<Results> simulate(const Material &material,
     }
     result.average_velocity = {0, 0};
     result.scattering_count.assign(mechanisms.size(), 0);
+    result.bin_excess_energy.assign(material.Nx, 0);
+    result.bin_samples.assign(material.Nx, 0);
     Pos2D r = material.create_initial_position();
     Vec2 p = material.create_particle();
     std::vector<double> free_flight(mechanisms.size(), 0);
@@ -198,6 +247,9 @@ std::vector<Results> simulate(const Material &material,
       double x_old = r.x;
       size_t scattering_mechanism = 0; // means no scattering
       double heat = (e - material.Delta) * v.x;
+      int bin = material.get_cell_index(x_old);
+      result.bin_excess_energy[bin] += e - material.Delta;
+      result.bin_samples[bin] += 1;
 
       r.y += v.y * time_step;
       r.x += v.x * time_step;
