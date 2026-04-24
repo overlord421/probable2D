@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cxxabi.h>
+#include <cmath>
 #include <ostream>
 #include <typeinfo>
 #include <vector>
@@ -53,6 +54,23 @@ const double eps0 = 8.85e-12 * units::C / units::V / units::m;
 namespace math {
 const double e = exp(1);
 const double pi = acos(-1);
+
+inline double comp_ellint_1(double k) {
+  // Complete elliptic integral K(k) via the arithmetic-geometric mean.
+  // This keeps the code buildable with libc++ versions lacking std::comp_ellint_1.
+  double kk = std::fabs(k);
+  if (kk >= 1) {
+    kk = std::nextafter(1.0, 0.0);
+  }
+  double a = 1.0;
+  double b = std::sqrt(1.0 - kk * kk);
+  for (int i = 0; i < 32 && std::fabs(a - b) > 1e-14 * a; ++i) {
+    double next_a = 0.5 * (a + b);
+    b = std::sqrt(a * b);
+    a = next_a;
+  }
+  return pi / (2.0 * a);
+}
 } // namespace math
 
 namespace probable {
@@ -129,11 +147,12 @@ enum DumpFlags {
   position = energy << 1,
   velocity = position << 1,
   scattering = velocity << 1,
-  energy_flux = scattering << 1,
-  all = number | time | momentum | energy | velocity | position | scattering | energy_flux,
+  heat_flux = scattering << 1,
+  particle_flux = heat_flux << 1,
+  all = number | time | momentum | energy | velocity | position | scattering | heat_flux | particle_flux,
   // frequency
   // without this flag it will dump on every step
-  on_scatterings = energy_flux << 1,
+  on_scatterings = particle_flux << 1,
 };
 
 struct Results {
@@ -148,7 +167,8 @@ struct Results {
   std::vector<double> energies;
   std::vector<uint32_t> scatterings;
   std::vector<double> positions;
-  std::vector<double> energy_flux;
+  std::vector<double> heat_flux;
+  std::vector<double> particle_flux;
   Results() {}
   Results(size_t cap, DumpFlags flags = DumpFlags::none)
       : size(0), flags(flags), ns(), ts(), momentums(), velocities(), energies(), scatterings() {
@@ -158,9 +178,11 @@ struct Results {
     velocities.reserve(cap);
     energies.reserve(cap);
     scatterings.reserve(cap);
-    energy_flux.reserve(cap);
+    positions.reserve(cap);
+    heat_flux.reserve(cap);
+    particle_flux.reserve(cap);
   }
-  void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x, double flux);
+  void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x, double q_flux, double n_flux);
   friend std::ostream &operator<<(std::ostream &s, const Results &r);
 };
 

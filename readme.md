@@ -6,3 +6,6 @@
 
 Build:  
 `g++ -fopenmp -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`
+
+Portable build without OpenMP:
+`g++ -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`

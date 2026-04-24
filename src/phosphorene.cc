@@ -1,4 +1,5 @@
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -13,6 +14,7 @@ const double Delta = 1.0 * units::eV; // полуширина запрещённ
 const double Lx = 300 * units::nm; // размер области
 const double Ly = 300 * units::nm;
 const int Nx = 100; // количество бинов
+const double carrier_density_2d = 1e16 / units::m / units::m; // m^-2 -> um^-2
 
 struct AcousticScattering : public Scattering {
   double Da, s;  // параметры материала
@@ -40,7 +42,7 @@ struct AcousticScattering : public Scattering {
     double k_param = Dminus / Dplus;
     
     // Полный эллиптический интеграл первого рода K(k)
-    double K = std::comp_ellint_1(k_param);
+    double K = math::comp_ellint_1(k_param);
     
     return constant * E * sqrt_term * K;
   }
@@ -69,7 +71,7 @@ struct OpticalEmissionScattering : public Scattering {
     
     double sqrt_term = std::sqrt((2 * m.mx * m.my) / (m.Delta * Dplus));
     double k_param = Dminus / Dplus;
-    double K = std::comp_ellint_1(k_param);
+    double K = math::comp_ellint_1(k_param);
     
     return constant * E * sqrt_term * K;
   }
@@ -161,12 +163,15 @@ int main(int argc, char const *argv[]) {
                           time_step,
                           all_time,
                           ensemble_size,
-                          DumpFlags(DumpFlags::energy_flux));
+                          DumpFlags(DumpFlags::heat_flux | DumpFlags::particle_flux));
   // Обработка результатов
   Vec2 average_velocity;
   Vec2 average_velocity2;
   std::vector<double> scattering_rates(mechanisms.size(), 0);
   std::vector<double> total_counts(mechanisms.size(), 0);
+  double avg_heat_flux = 0;
+  double avg_particle_flux = 0;
+  size_t flux_samples = 0;
   
   for (std::size_t i = 0; i < results.size(); ++i) {
     average_velocity += (results[i].average_velocity - average_velocity) / (i + 1);
@@ -178,18 +183,35 @@ int main(int argc, char const *argv[]) {
           (results[i].scattering_count[j] / all_time * units::s - scattering_rates[j]) / (i + 1);
 	  total_counts[j] += results[i].scattering_count[j];
     }
+    for (std::size_t j = 0; j < results[i].heat_flux.size(); ++j) {
+      avg_heat_flux += results[i].heat_flux[j];
+      avg_particle_flux += results[i].particle_flux[j];
+      flux_samples += 1;
+    }
+  }
+  if (flux_samples > 0) {
+    avg_heat_flux /= flux_samples;
+    avg_particle_flux /= flux_samples;
   }
   Vec2 std_velocity = (average_velocity2 - average_velocity * average_velocity).sqrt();
   
-  // сохранение потока энергии в файл
-  std::ofstream flux_file("../output/energy_flux_avg.txt");
-  size_t steps = results[0].energy_flux.size();
+  // сохранение оценок теплового потока и kappa в файл
+  std::filesystem::create_directories("../output");
+  std::ofstream flux_file("../output/heat_flux_kappa_avg.txt");
+  size_t steps = results[0].heat_flux.size();
+  double gradT = ((T_right - T_left) / units::K) / (Lx / units::m);
+  double heat_flux_unit_2d = units::J / units::s / units::m;
   for (size_t j = 0; j < steps; j += 100) {
-    double sum_flux = 0;
+    double sum_heat_flux = 0;
+    double sum_particle_flux = 0;
     for (size_t i = 0; i < results.size(); ++i) {
-      sum_flux += results[i].energy_flux[j];
+      sum_heat_flux += results[i].heat_flux[j];
+      sum_particle_flux += results[i].particle_flux[j];
     }
-    flux_file << sum_flux / results.size() / -((T_left - T_right) / Lx) << "\n";
+    double heat_flux_2d = (sum_heat_flux / results.size()) * carrier_density_2d / heat_flux_unit_2d;
+    double particle_flux_2d = (sum_particle_flux / results.size()) * carrier_density_2d;
+    double kappa_2d = -heat_flux_2d / gradT;
+    flux_file << j << " " << heat_flux_2d << " " << particle_flux_2d << " " << kappa_2d << "\n";
   }
   flux_file.close();  
   
@@ -206,6 +228,11 @@ int main(int argc, char const *argv[]) {
   std::cout << "      Directions: {ZZ, AC}\n";
   std::cout << "Average velocity: " << average_velocity << " μm/ps\n";
   std::cout << "             std: " << std_velocity << " μm/ps\n";
+  double heat_flux_2d = avg_heat_flux * carrier_density_2d / heat_flux_unit_2d;
+  double kappa_2d = -heat_flux_2d / gradT;
+  std::cout << "Mean heat flux:   " << heat_flux_2d << " W/m (2D sheet)\n";
+  std::cout << "Particle flux:    " << avg_particle_flux * carrier_density_2d << " 1/(μm·ps)\n";
+  std::cout << "Kappa 2D:         " << kappa_2d << " W/K\n";
   std::cout << "Scattering rates: " << scattering_rates << " 1/s\n";
   std::cout << "           Total: " << sum(scattering_rates) << " 1/s\n";
   std::cout << "Scattering count: " << total_counts << " times\n";
