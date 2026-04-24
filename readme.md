@@ -10,7 +10,8 @@ Build:
 Portable build without OpenMP:
 `g++ -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`
 
-The reworked kappa branch also writes `output/local_temperature_profile.txt`
-with the measured temperature profile reconstructed from binned carrier energy.
+The reworked kappa branch also writes `output/initial_temperature_profile.txt`
+and `output/local_temperature_profile.txt` with temperature profiles reconstructed
+from binned carrier energy.
 Flux history in `output/heat_flux_kappa_avg.txt` is accumulated in time windows
 instead of storing every particle step.

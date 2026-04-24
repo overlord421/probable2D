@@ -245,8 +245,13 @@ std::vector<Results> simulate(const Material &material,
     result.scattering_count.assign(mechanisms.size(), 0);
     result.bin_excess_energy.assign(material.Nx, 0);
     result.bin_samples.assign(material.Nx, 0);
+    result.initial_bin_excess_energy.assign(material.Nx, 0);
+    result.initial_bin_samples.assign(material.Nx, 0);
     Pos2D r = material.create_initial_position();
     Vec2 p = material.create_particle_at_temperature(material.get_temperature(r.x));
+    int initial_bin = material.get_cell_index(r.x);
+    result.initial_bin_excess_energy[initial_bin] += material.energy(p) - material.Delta;
+    result.initial_bin_samples[initial_bin] += 1;
     std::vector<double> free_flight(mechanisms.size(), 0);
     for (double &l : free_flight) {
       l = -log(uniform());

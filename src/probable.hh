@@ -182,6 +182,8 @@ struct Results {
   std::vector<uint64_t> flux_window_samples;
   std::vector<double> bin_excess_energy;
   std::vector<uint64_t> bin_samples;
+  std::vector<double> initial_bin_excess_energy;
+  std::vector<uint64_t> initial_bin_samples;
   Results() {}
   Results(size_t cap, DumpFlags flags = DumpFlags::none, size_t flux_windows = 0, size_t flux_stride = 1)
       : size(0), flags(flags), heat_flux_sum(0), particle_flux_sum(0), flux_samples(0),

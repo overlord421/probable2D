@@ -101,6 +101,31 @@ template <typename T> T sum(std::vector<T> t) {
   return s;
 }
 
+void write_temperature_profile(const std::string &path,
+                               const Material &material,
+                               const std::vector<double> &bin_excess_energy,
+                               const std::vector<uint64_t> &bin_samples,
+                               double T_left,
+                               double T_right) {
+  std::ofstream temp_file(path);
+  double T_min = 1 * units::K;
+  double T_max = 3 * std::max(T_left, T_right);
+  temp_file << "# x_m prescribed_T_K mean_excess_eV measured_T_K samples\n";
+  for (int bin = 0; bin < material.Nx; ++bin) {
+    double x_center = (bin + 0.5) * material.cell_size;
+    double prescribed_T = material.get_temperature(x_center);
+    double mean_excess = bin_samples[bin] > 0 ? bin_excess_energy[bin] / bin_samples[bin] : 0;
+    double measured_T = bin_samples[bin] > 0
+        ? material.temperature_from_mean_excess_energy(mean_excess, T_min, T_max)
+        : 0;
+    temp_file << x_center / units::m << " "
+              << prescribed_T / units::K << " "
+              << mean_excess / units::eV << " "
+              << measured_T / units::K << " "
+              << bin_samples[bin] << "\n";
+  }
+}
+
 int main(int argc, char const *argv[]) {
   if (argc != 8) {
     std::cout << "Invalid number of arguments\n";
@@ -175,6 +200,8 @@ int main(int argc, char const *argv[]) {
   size_t flux_samples = 0;
   std::vector<double> bin_excess_energy(Nx, 0);
   std::vector<uint64_t> bin_samples(Nx, 0);
+  std::vector<double> initial_bin_excess_energy(Nx, 0);
+  std::vector<uint64_t> initial_bin_samples(Nx, 0);
   
   for (std::size_t i = 0; i < results.size(); ++i) {
     average_velocity += (results[i].average_velocity - average_velocity) / (i + 1);
@@ -192,6 +219,8 @@ int main(int argc, char const *argv[]) {
     for (std::size_t j = 0; j < results[i].bin_excess_energy.size(); ++j) {
       bin_excess_energy[j] += results[i].bin_excess_energy[j];
       bin_samples[j] += results[i].bin_samples[j];
+      initial_bin_excess_energy[j] += results[i].initial_bin_excess_energy[j];
+      initial_bin_samples[j] += results[i].initial_bin_samples[j];
     }
   }
   if (flux_samples > 0) {
@@ -226,24 +255,18 @@ int main(int argc, char const *argv[]) {
   }
   flux_file.close();  
 
-  std::ofstream temp_file("../output/local_temperature_profile.txt");
-  double T_min = 1 * units::K;
-  double T_max = 3 * std::max(T_left, T_right);
-  temp_file << "# x_m prescribed_T_K mean_excess_eV measured_T_K samples\n";
-  for (int bin = 0; bin < Nx; ++bin) {
-    double x_center = (bin + 0.5) * phosphorene.cell_size;
-    double prescribed_T = phosphorene.get_temperature(x_center);
-    double mean_excess = bin_samples[bin] > 0 ? bin_excess_energy[bin] / bin_samples[bin] : 0;
-    double measured_T = bin_samples[bin] > 0
-        ? phosphorene.temperature_from_mean_excess_energy(mean_excess, T_min, T_max)
-        : 0;
-    temp_file << x_center / units::m << " "
-              << prescribed_T / units::K << " "
-              << mean_excess / units::eV << " "
-              << measured_T / units::K << " "
-              << bin_samples[bin] << "\n";
-  }
-  temp_file.close();
+  write_temperature_profile("../output/initial_temperature_profile.txt",
+                            phosphorene,
+                            initial_bin_excess_energy,
+                            initial_bin_samples,
+                            T_left,
+                            T_right);
+  write_temperature_profile("../output/local_temperature_profile.txt",
+                            phosphorene,
+                            bin_excess_energy,
+                            bin_samples,
+                            T_left,
+                            T_right);
   
   // сохранение начальных энергий частиц
 //   std::ofstream energy_file("../output/initial_energy.txt");
