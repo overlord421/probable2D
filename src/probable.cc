@@ -42,9 +42,38 @@ void Material::apply_boundary(double &x, Vec2 &p) const {
   if (T != -1) {
     double m_eff = (mx + my) / 2;
     double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
-    double v_max = std::sqrt(Delta / mx);
     double boltzmann_floor = std::exp(-Delta / (consts::kB * T));
-        
+
+    auto density_of_states = [this](double E) {
+      double Dplus = Delta + E;
+      double Dminus = Delta - E;
+      double g = 2; // спиновое вырождение
+      double sqrt_term = std::sqrt((2 * mx * my) / (Delta * Dplus));
+      double k_param = Dminus / Dplus;
+      double K = math::comp_ellint_1(k_param);
+      return g * E * sqrt_term * K / pow(math::pi * consts::hbar, 2);
+    };
+
+    double envelope = 0;
+    for (int ix = 1; ix <= 32; ++ix) {
+      for (int iy = 0; iy <= 32; ++iy) {
+        Vec2 p_probe{p_max * sign * ix / 32.0, p_max * (-1 + 2.0 * iy / 32.0)};
+        double incoming_vx = sign * velocity(p_probe).x;
+        if (incoming_vx <= 0) {
+          continue;
+        }
+        double E = energy(p_probe);
+        double rho = density_of_states(E);
+        double weight = incoming_vx * rho * std::exp(-E / (consts::kB * T));
+        if (weight > envelope) {
+          envelope = weight;
+        }
+      }
+    }
+    if (envelope <= 0) {
+      envelope = boltzmann_floor;
+    }
+
     while (true) {
       double p_x_new = p_max * sign * uniform();
       double p_y_new = p_max * (-1 + uniform() * 2);
@@ -54,8 +83,10 @@ void Material::apply_boundary(double &x, Vec2 &p) const {
       if (incoming_vx <= 0) {
         continue;
       }
-      double prob = uniform() * v_max * boltzmann_floor;
-      double weight = incoming_vx * std::exp(-energy(p_test) / (consts::kB * T));
+      double E = energy(p_test);
+      double rho = density_of_states(E);
+      double prob = uniform() * envelope;
+      double weight = incoming_vx * rho * std::exp(-E / (consts::kB * T));
       if (prob < weight) {
         p = p_test;
         break;
