@@ -186,11 +186,9 @@ int main(int argc, char const *argv[]) {
           (results[i].scattering_count[j] / all_time * units::s - scattering_rates[j]) / (i + 1);
 	  total_counts[j] += results[i].scattering_count[j];
     }
-    for (std::size_t j = 0; j < results[i].heat_flux.size(); ++j) {
-      avg_heat_flux += results[i].heat_flux[j];
-      avg_particle_flux += results[i].particle_flux[j];
-      flux_samples += 1;
-    }
+    avg_heat_flux += results[i].heat_flux_sum;
+    avg_particle_flux += results[i].particle_flux_sum;
+    flux_samples += results[i].flux_samples;
     for (std::size_t j = 0; j < results[i].bin_excess_energy.size(); ++j) {
       bin_excess_energy[j] += results[i].bin_excess_energy[j];
       bin_samples[j] += results[i].bin_samples[j];
@@ -205,20 +203,26 @@ int main(int argc, char const *argv[]) {
   // сохранение оценок теплового потока и kappa в файл
   std::filesystem::create_directories("../output");
   std::ofstream flux_file("../output/heat_flux_kappa_avg.txt");
-  size_t steps = results[0].heat_flux.size();
   double gradT = ((T_right - T_left) / units::K) / (Lx / units::m);
   double heat_flux_unit_2d = units::J / units::s / units::m;
-  for (size_t j = 0; j < steps; j += 100) {
+  size_t flux_windows = results.empty() ? 0 : results[0].flux_window_samples.size();
+  size_t flux_stride = results.empty() ? 1 : results[0].flux_sample_stride;
+  for (size_t j = 0; j < flux_windows; ++j) {
     double sum_heat_flux = 0;
     double sum_particle_flux = 0;
+    uint64_t window_samples = 0;
     for (size_t i = 0; i < results.size(); ++i) {
-      sum_heat_flux += results[i].heat_flux[j];
-      sum_particle_flux += results[i].particle_flux[j];
+      sum_heat_flux += results[i].heat_flux_windows[j];
+      sum_particle_flux += results[i].particle_flux_windows[j];
+      window_samples += results[i].flux_window_samples[j];
     }
-    double heat_flux_2d = (sum_heat_flux / results.size()) * carrier_density_2d / heat_flux_unit_2d;
-    double particle_flux_2d = (sum_particle_flux / results.size()) * carrier_density_2d;
+    if (window_samples == 0) {
+      continue;
+    }
+    double heat_flux_2d = (sum_heat_flux / window_samples) * carrier_density_2d / heat_flux_unit_2d;
+    double particle_flux_2d = (sum_particle_flux / window_samples) * carrier_density_2d;
     double kappa_2d = -heat_flux_2d / gradT;
-    flux_file << j << " " << heat_flux_2d << " " << particle_flux_2d << " " << kappa_2d << "\n";
+    flux_file << j * flux_stride << " " << heat_flux_2d << " " << particle_flux_2d << " " << kappa_2d << "\n";
   }
   flux_file.close();  
 

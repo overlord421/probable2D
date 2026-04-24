@@ -139,6 +139,21 @@ void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double 
   if (s) {
     scattering_count[s - 1] += 1;
   }
+  if (flags & DumpFlags::heat_flux) {
+    heat_flux_sum += q_flux;
+  }
+  if (flags & DumpFlags::particle_flux) {
+    particle_flux_sum += n_flux;
+  }
+  if (flags & (DumpFlags::heat_flux | DumpFlags::particle_flux)) {
+    flux_samples += 1;
+    size_t window = flux_sample_stride > 0 ? n / flux_sample_stride : 0;
+    if (window < flux_window_samples.size()) {
+      heat_flux_windows[window] += q_flux;
+      particle_flux_windows[window] += n_flux;
+      flux_window_samples[window] += 1;
+    }
+  }
   if (not(flags & DumpFlags::on_scatterings) or s) {
     if (flags & DumpFlags::scattering) {
       scatterings.push_back(s);
@@ -160,12 +175,6 @@ void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double 
     }
     if (flags & DumpFlags::position) {
       positions.push_back(x);
-    }
-    if (flags & DumpFlags::heat_flux) {
-      heat_flux.push_back(q_flux);
-    }
-    if (flags & DumpFlags::particle_flux) {
-      particle_flux.push_back(n_flux);
     }
     size += 1;
   }
@@ -201,12 +210,6 @@ std::ostream &operator<<(std::ostream &s, const Results &r) {
     if (r.flags & DumpFlags::scattering) {
       s << r.scatterings[i];
     }
-    if (r.flags & DumpFlags::heat_flux) {
-      s << r.heat_flux[i] << " ";
-    }
-    if (r.flags & DumpFlags::particle_flux) {
-      s << r.particle_flux[i] << " ";
-    }
     s << "\n";
   }
   return s;
@@ -223,11 +226,16 @@ std::vector<Results> simulate(const Material &material,
   std::vector<Results> results(ensemble_size);
   size_t steps = all_time / time_step + 1;
   size_t alloc = (flags & DumpFlags::on_scatterings) ? steps / 10 : steps;
+  if (flags == DumpFlags(DumpFlags::heat_flux | DumpFlags::particle_flux)) {
+    alloc = 0;
+  }
+  size_t flux_sample_stride = 100;
+  size_t flux_windows = (steps + flux_sample_stride - 1) / flux_sample_stride;
 #pragma omp parallel for
   for (size_t i = 0; i < ensemble_size; ++i) {
     Results &result = results[i];
     if (flags != DumpFlags::none) {
-      result = Results(alloc, flags);
+      result = Results(alloc, flags, flux_windows, flux_sample_stride);
     }
     result.average_velocity = {0, 0};
     result.scattering_count.assign(mechanisms.size(), 0);

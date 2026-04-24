@@ -12,3 +12,5 @@ Portable build without OpenMP:
 
 The reworked kappa branch also writes `output/local_temperature_profile.txt`
 with the measured temperature profile reconstructed from binned carrier energy.
+Flux history in `output/heat_flux_kappa_avg.txt` is accumulated in time windows
+instead of storing every particle step.

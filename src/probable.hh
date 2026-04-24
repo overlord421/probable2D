@@ -171,13 +171,19 @@ struct Results {
   std::vector<double> energies;
   std::vector<uint32_t> scatterings;
   std::vector<double> positions;
-  std::vector<double> heat_flux;
-  std::vector<double> particle_flux;
+  double heat_flux_sum;
+  double particle_flux_sum;
+  uint64_t flux_samples;
+  size_t flux_sample_stride;
+  std::vector<double> heat_flux_windows;
+  std::vector<double> particle_flux_windows;
+  std::vector<uint64_t> flux_window_samples;
   std::vector<double> bin_excess_energy;
   std::vector<uint64_t> bin_samples;
   Results() {}
-  Results(size_t cap, DumpFlags flags = DumpFlags::none)
-      : size(0), flags(flags), ns(), ts(), momentums(), velocities(), energies(), scatterings() {
+  Results(size_t cap, DumpFlags flags = DumpFlags::none, size_t flux_windows = 0, size_t flux_stride = 1)
+      : size(0), flags(flags), heat_flux_sum(0), particle_flux_sum(0), flux_samples(0),
+        flux_sample_stride(flux_stride), ns(), ts(), momentums(), velocities(), energies(), scatterings() {
     ns.reserve(cap);
     ts.reserve(cap);
     momentums.reserve(cap);
@@ -185,8 +191,9 @@ struct Results {
     energies.reserve(cap);
     scatterings.reserve(cap);
     positions.reserve(cap);
-    heat_flux.reserve(cap);
-    particle_flux.reserve(cap);
+    heat_flux_windows.assign(flux_windows, 0);
+    particle_flux_windows.assign(flux_windows, 0);
+    flux_window_samples.assign(flux_windows, 0);
   }
   void append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x, double q_flux, double n_flux);
   friend std::ostream &operator<<(std::ostream &s, const Results &r);
