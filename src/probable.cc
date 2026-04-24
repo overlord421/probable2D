@@ -42,22 +42,22 @@ void Material::apply_boundary(double &x, Vec2 &p) const {
   if (T != -1) {
     double m_eff = (mx + my) / 2;
     double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
-    
-    double E = energy(p);
-    double Dplus = Delta + E;
-    double Dminus = Delta - E;
-    double g = 2; // спиновое вырождение
-    double sqrt_term = std::sqrt((2 * mx * my) / (Delta * Dplus));
-    double k_param = Dminus / Dplus;
-    double K = math::comp_ellint_1(k_param);
-    double rho = g * E * sqrt_term * K / pow(math::pi * consts::hbar, 2);
 
     while (true) {
       double p_x_new = p_max * sign * uniform();
       double prob = uniform() * exp(-Delta / (consts::kB * T));
       
       Vec2 p_test{p_x_new, p.y};
-      if (prob < exp(-energy(p_test) / (consts::kB * T)) * fabs(p.x) * rho) {
+      double E = energy(p_test);
+      double Dplus = Delta + E;
+      double Dminus = Delta - E;
+      double g = 2; // спиновое вырождение
+      double sqrt_term = std::sqrt((2 * mx * my) / (Delta * Dplus));
+      double k_param = Dminus / Dplus;
+      double K = math::comp_ellint_1(k_param);
+      double rho = g * E * sqrt_term * K / pow(math::pi * consts::hbar, 2);
+
+      if (prob < exp(-E / (consts::kB * T)) * fabs(p_test.x) * rho) {
         p.x = p_x_new;
         break;
       }
