@@ -126,6 +126,40 @@ void write_temperature_profile(const std::string &path,
   }
 }
 
+void write_boundary_injection_temperature(const std::string &path,
+                                          const Material &material,
+                                          double left_excess_energy,
+                                          uint64_t left_samples,
+                                          double right_excess_energy,
+                                          uint64_t right_samples,
+                                          double T_left,
+                                          double T_right) {
+  std::ofstream out(path);
+  double T_min = 1 * units::K;
+  double T_max = 3 * std::max(T_left, T_right);
+  out << "# side prescribed_T_K mean_excess_eV measured_T_K samples\n";
+
+  double left_mean = left_samples > 0 ? left_excess_energy / left_samples : 0;
+  double left_T = left_samples > 0
+      ? material.temperature_from_mean_excess_energy(left_mean, T_min, T_max)
+      : 0;
+  out << "left "
+      << T_left / units::K << " "
+      << left_mean / units::eV << " "
+      << left_T / units::K << " "
+      << left_samples << "\n";
+
+  double right_mean = right_samples > 0 ? right_excess_energy / right_samples : 0;
+  double right_T = right_samples > 0
+      ? material.temperature_from_mean_excess_energy(right_mean, T_min, T_max)
+      : 0;
+  out << "right "
+      << T_right / units::K << " "
+      << right_mean / units::eV << " "
+      << right_T / units::K << " "
+      << right_samples << "\n";
+}
+
 int main(int argc, char const *argv[]) {
   if (argc != 8) {
     std::cout << "Invalid number of arguments\n";
@@ -202,6 +236,10 @@ int main(int argc, char const *argv[]) {
   std::vector<uint64_t> bin_samples(Nx, 0);
   std::vector<double> initial_bin_excess_energy(Nx, 0);
   std::vector<uint64_t> initial_bin_samples(Nx, 0);
+  double injected_left_excess_energy = 0;
+  double injected_right_excess_energy = 0;
+  uint64_t injected_left_samples = 0;
+  uint64_t injected_right_samples = 0;
   
   for (std::size_t i = 0; i < results.size(); ++i) {
     average_velocity += (results[i].average_velocity - average_velocity) / (i + 1);
@@ -222,6 +260,10 @@ int main(int argc, char const *argv[]) {
       initial_bin_excess_energy[j] += results[i].initial_bin_excess_energy[j];
       initial_bin_samples[j] += results[i].initial_bin_samples[j];
     }
+    injected_left_excess_energy += results[i].injected_left_excess_energy;
+    injected_right_excess_energy += results[i].injected_right_excess_energy;
+    injected_left_samples += results[i].injected_left_samples;
+    injected_right_samples += results[i].injected_right_samples;
   }
   if (flux_samples > 0) {
     avg_heat_flux /= flux_samples;
@@ -267,6 +309,14 @@ int main(int argc, char const *argv[]) {
                             bin_samples,
                             T_left,
                             T_right);
+  write_boundary_injection_temperature("../output/boundary_injection_temperature.txt",
+                                       phosphorene,
+                                       injected_left_excess_energy,
+                                       injected_left_samples,
+                                       injected_right_excess_energy,
+                                       injected_right_samples,
+                                       T_left,
+                                       T_right);
   
   // сохранение начальных энергий частиц
 //   std::ofstream energy_file("../output/initial_energy.txt");

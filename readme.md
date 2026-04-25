@@ -13,5 +13,8 @@ Portable build without OpenMP:
 The reworked kappa branch also writes `output/initial_temperature_profile.txt`
 and `output/local_temperature_profile.txt` with temperature profiles reconstructed
 from binned carrier energy.
+`output/boundary_injection_temperature.txt` reports the reconstructed
+temperature of particles injected from the left and right thermostats.
+Temperature and flux tallies skip the first 20% of time steps as burn-in.
 Flux history in `output/heat_flux_kappa_avg.txt` is accumulated in time windows
 instead of storing every particle step.

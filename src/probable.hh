@@ -104,11 +104,13 @@ struct Material {
   Vec2 create_particle() const;
 
   Vec2 create_particle_at_temperature(double T) const;
+
+  Vec2 create_flux_particle_at_temperature(double T, double sign) const;
   
   Pos2D create_initial_position() const;
   
   // Отражающие граничные условия
-  void apply_boundary(double &x, Vec2 &p) const;
+  int apply_boundary(double &x, Vec2 &p) const;
   
   // получение индекса ячейки
   int get_cell_index(double x) const {
@@ -184,10 +186,16 @@ struct Results {
   std::vector<uint64_t> bin_samples;
   std::vector<double> initial_bin_excess_energy;
   std::vector<uint64_t> initial_bin_samples;
+  double injected_left_excess_energy;
+  double injected_right_excess_energy;
+  uint64_t injected_left_samples;
+  uint64_t injected_right_samples;
   Results() {}
   Results(size_t cap, DumpFlags flags = DumpFlags::none, size_t flux_windows = 0, size_t flux_stride = 1)
       : size(0), flags(flags), heat_flux_sum(0), particle_flux_sum(0), flux_samples(0),
-        flux_sample_stride(flux_stride), ns(), ts(), momentums(), velocities(), energies(), scatterings() {
+        flux_sample_stride(flux_stride), injected_left_excess_energy(0), injected_right_excess_energy(0),
+        injected_left_samples(0), injected_right_samples(0),
+        ns(), ts(), momentums(), velocities(), energies(), scatterings() {
     ns.reserve(cap);
     ts.reserve(cap);
     momentums.reserve(cap);

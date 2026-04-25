@@ -25,48 +25,52 @@ Vec2 Material::create_particle_at_temperature(double T) const {
   }
 }
 
+Vec2 Material::create_flux_particle_at_temperature(double T, double sign) const {
+  double m_eff = (mx + my) / 2;
+  double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
+  double v_max = std::sqrt(Delta / mx);
+  double boltzmann_floor = std::exp(-Delta / (consts::kB * T));
+
+  while (true) {
+    Vec2 p{p_max * sign * uniform(), p_max * (-1 + uniform() * 2)};
+    double incoming_vx = sign * velocity(p).x;
+    if (incoming_vx <= 0) {
+      continue;
+    }
+
+    double prob = uniform() * v_max * boltzmann_floor;
+    double weight = incoming_vx * std::exp(-energy(p) / (consts::kB * T));
+    if (prob < weight) {
+      return p;
+    }
+  }
+}
+
 Pos2D Material::create_initial_position() const {
   return {uniform() * Lx, uniform() * Ly};  // равномерно от 0 до Lx
 }
 
-void Material::apply_boundary(double &x, Vec2 &p) const {
+int Material::apply_boundary(double &x, Vec2 &p) const {
   double T = -1;
   double sign = 0;
+  int side = 0;
   
   if (x < 0) {
     x = 0;
     T = T_left;
     sign = 1;
+    side = -1;
   } else if (x > Lx) {
     x = Lx;
     T = T_right;
     sign = -1;
+    side = 1;
   }
     
   if (T != -1) {
-    double m_eff = (mx + my) / 2;
-    double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
-
-    while (true) {
-      double p_x_new = p_max * sign * uniform();
-      double prob = uniform() * exp(-Delta / (consts::kB * T));
-      
-      Vec2 p_test{p_x_new, p.y};
-      double E = energy(p_test);
-      double Dplus = Delta + E;
-      double Dminus = Delta - E;
-      double g = 2; // спиновое вырождение
-      double sqrt_term = std::sqrt((2 * mx * my) / (Delta * Dplus));
-      double k_param = Dminus / Dplus;
-      double K = math::comp_ellint_1(k_param);
-      double rho = g * E * sqrt_term * K / pow(math::pi * consts::hbar, 2);
-
-      if (prob < exp(-E / (consts::kB * T)) * fabs(p_test.x) * rho) {
-        p.x = p_x_new;
-        break;
-      }
-    }
+    p = create_flux_particle_at_temperature(T, sign);
   }
+  return side;
 }
 
 double Material::mean_excess_energy_at_temperature(double T) const {
@@ -235,6 +239,7 @@ std::vector<Results> simulate(const Material &material,
   }
   size_t flux_sample_stride = 100;
   size_t flux_windows = (steps + flux_sample_stride - 1) / flux_sample_stride;
+  size_t tally_start_step = steps / 5;
 #pragma omp parallel for
   for (size_t i = 0; i < ensemble_size; ++i) {
     Results &result = results[i];
@@ -264,15 +269,25 @@ std::vector<Results> simulate(const Material &material,
       double x_old = r.x;
       size_t scattering_mechanism = 0; // means no scattering
       double heat = (e - material.Delta) * v.x;
-      int bin = material.get_cell_index(x_old);
-      result.bin_excess_energy[bin] += e - material.Delta;
-      result.bin_samples[bin] += 1;
+      bool tally = j >= tally_start_step;
+      if (tally) {
+        int bin = material.get_cell_index(x_old);
+        result.bin_excess_energy[bin] += e - material.Delta;
+        result.bin_samples[bin] += 1;
+      }
 
       r.y += v.y * time_step;
       r.x += v.x * time_step;
       if (r.y < 0) r.y += material.Ly;
       if (r.y >= material.Ly) r.y -= material.Ly;
-      material.apply_boundary(r.x, p);
+      int injected_side = material.apply_boundary(r.x, p);
+      if (injected_side < 0) {
+        result.injected_left_excess_energy += material.energy(p) - material.Delta;
+        result.injected_left_samples += 1;
+      } else if (injected_side > 0) {
+        result.injected_right_excess_energy += material.energy(p) - material.Delta;
+        result.injected_right_samples += 1;
+      }
       p += -consts::e * (electric_field + v.cross_with_B(magnetic_field_z)) * time_step;
 
       for (size_t k = 0; k < mechanisms.size(); ++k) {
@@ -284,7 +299,13 @@ std::vector<Results> simulate(const Material &material,
           break;
         }
       }
-      result.append(j, j * time_step, p_, v, e, scattering_mechanism, x_old, heat, v.x);
+      if (tally) {
+        result.append(j, j * time_step, p_, v, e, scattering_mechanism, x_old, heat, v.x);
+      } else {
+        if (scattering_mechanism) {
+          result.scattering_count[scattering_mechanism - 1] += 1;
+        }
+      }
     }
   }
   return results;
