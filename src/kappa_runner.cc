@@ -1,6 +1,7 @@
 #include <kappa_runner.hh>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -71,6 +72,19 @@ void write_boundary_injection_temperature(const std::string &path,
       << right_samples << "\n";
 }
 
+Vec2 with_axis_field(const Material &material, Vec2 field, double axis_field) {
+  if (material.thermal_axis == 'y') {
+    field.y = axis_field;
+  } else {
+    field.x = axis_field;
+  }
+  return field;
+}
+
+double axis_field(const Material &material, const Vec2 &field) {
+  return material.thermal_axis == 'y' ? field.y : field.x;
+}
+
 } // namespace
 
 KappaRunResult run_kappa_simulation(const Material &material,
@@ -86,6 +100,8 @@ KappaRunResult run_kappa_simulation(const Material &material,
                           DumpFlags(DumpFlags::heat_flux | DumpFlags::particle_flux));
 
   KappaRunResult result;
+  result.electric_field = config.electric_field;
+  result.seebeck_field_axis = axis_field(material, config.electric_field);
   Vec2 average_velocity2;
   result.scattering_rates.assign(mechanisms.size(), 0);
   result.scattering_counts.assign(mechanisms.size(), 0);
@@ -177,6 +193,83 @@ KappaRunResult run_kappa_simulation(const Material &material,
   result.kappa_2d = -result.heat_flux_2d / gradT;
 
   return result;
+}
+
+KappaRunResult run_open_circuit_kappa_simulation(const Material &material,
+                                                 const std::vector<Scattering *> &mechanisms,
+                                                 const KappaRunConfig &config) {
+  if (!config.tune_seebeck_field) {
+    return run_kappa_simulation(material, mechanisms, config);
+  }
+
+  KappaRunConfig trial = config;
+  trial.tune_seebeck_field = false;
+  std::string final_output_dir = trial.output_dir;
+  trial.output_dir = final_output_dir + "/seebeck_trials";
+  std::vector<KappaRunResult> trial_results;
+
+  auto run_trial = [&](double field) {
+    trial.electric_field = with_axis_field(material, config.electric_field, field);
+    KappaRunResult result = run_kappa_simulation(material, mechanisms, trial);
+    trial_results.push_back(result);
+    return result;
+  };
+
+  double e0 = axis_field(material, config.electric_field);
+  KappaRunResult r0 = run_trial(e0);
+  if (std::fabs(r0.particle_flux_2d) <= config.seebeck_tolerance) {
+    trial.output_dir = final_output_dir;
+    return run_kappa_simulation(material, mechanisms, trial);
+  }
+
+  double step = config.seebeck_initial_step;
+  double e1 = e0 + (r0.particle_flux_2d > 0 ? -step : step);
+  KappaRunResult r1 = run_trial(e1);
+
+  for (int i = 0; i < config.seebeck_iterations; ++i) {
+    if (std::fabs(r1.particle_flux_2d) <= config.seebeck_tolerance) {
+      break;
+    }
+
+    double denom = r1.particle_flux_2d - r0.particle_flux_2d;
+    double e2 = e1;
+    if (std::fabs(denom) > 1e-30) {
+      e2 = e1 - r1.particle_flux_2d * (e1 - e0) / denom;
+    } else {
+      e2 = e1 + (r1.particle_flux_2d > 0 ? -step : step);
+    }
+
+    double max_jump = 10 * step;
+    if (std::fabs(e2 - e1) > max_jump) {
+      e2 = e1 + (e2 > e1 ? max_jump : -max_jump);
+    }
+
+    e0 = e1;
+    r0 = r1;
+    e1 = e2;
+    r1 = run_trial(e1);
+  }
+
+  KappaRunResult best = trial_results.front();
+  for (auto &result : trial_results) {
+    if (std::fabs(result.particle_flux_2d) < std::fabs(best.particle_flux_2d)) {
+      best = result;
+    }
+  }
+
+  std::filesystem::create_directories(final_output_dir);
+  std::ofstream fit_file(final_output_dir + "/seebeck_field_fit.txt");
+  fit_file << "# E_axis_V_per_m particle_flux_1_per_um_ps heat_flux_W_per_m kappa_W_per_K\n";
+  for (auto &result : trial_results) {
+    fit_file << result.seebeck_field_axis / units::V * units::m << " "
+             << result.particle_flux_2d << " "
+             << result.heat_flux_2d << " "
+             << result.kappa_2d << "\n";
+  }
+
+  trial.output_dir = final_output_dir;
+  trial.electric_field = best.electric_field;
+  return run_kappa_simulation(material, mechanisms, trial);
 }
 
 } // namespace probable

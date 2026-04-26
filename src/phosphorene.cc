@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #include <gapped2d_scattering.hh>
 #include <kappa_runner.hh>
@@ -39,9 +40,10 @@ template <typename T> T sum(std::vector<T> t) {
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc != 8 && argc != 9) {
+  if (argc < 8 || argc > 10) {
     std::cout << "Invalid number of arguments\n";
-    std::cout << "Usage: " << argv[0] << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis=x|y]\n";
+    std::cout << "Usage: " << argv[0]
+              << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis=x|y] [--seebeck]\n";
     return 1;
   }
 
@@ -53,8 +55,19 @@ int main(int argc, char const *argv[]) {
   double magnetic_field_z = parse<double>(argv[6]) * units::T;
   double all_time = parse<double>(argv[7]) * units::s;
   char thermal_axis = 'x';
-  if (argc == 9) {
-    thermal_axis = argv[8][0] == 'y' || argv[8][0] == 'Y' ? 'y' : 'x';
+  bool tune_seebeck_field = false;
+  for (int i = 8; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "y" || arg == "Y" || arg == "axis=y") {
+      thermal_axis = 'y';
+    } else if (arg == "x" || arg == "X" || arg == "axis=x") {
+      thermal_axis = 'x';
+    } else if (arg == "--seebeck" || arg == "seebeck") {
+      tune_seebeck_field = true;
+    } else {
+      std::cout << "Unknown optional argument: " << arg << "\n";
+      return 1;
+    }
   }
 
   Material phosphorene{
@@ -103,6 +116,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Temperature left: " << T_left / units::K << " K\n";
   std::cout << "Temperature right:" << T_right / units::K << " K\n";
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
+  std::cout << "Seebeck fitting:  " << (tune_seebeck_field ? "on" : "off") << "\n";
   std::cout << "Magnetic field:   " << magnetic_field_z / units::T << " T\n";
   std::cout << "Scattering mechanisms:\n";
   for (size_t i = 0; i < mechanisms.size(); ++i) {
@@ -117,10 +131,13 @@ int main(int argc, char const *argv[]) {
     carrier_density_2d,
     "../output"
   };
-  KappaRunResult result = run_kappa_simulation(phosphorene, mechanisms, config);
+  config.tune_seebeck_field = tune_seebeck_field;
+  KappaRunResult result = run_open_circuit_kappa_simulation(phosphorene, mechanisms, config);
   
   std::cout << "\n===== Results =====\n";
   std::cout << "      Directions: {ZZ, AC}\n";
+  std::cout << "Electric field:   " << result.electric_field / units::V * units::m << " V/m\n";
+  std::cout << "Seebeck axis E:   " << result.seebeck_field_axis / units::V * units::m << " V/m\n";
   std::cout << "Average velocity: " << result.average_velocity << " μm/ps\n";
   std::cout << "             std: " << result.std_velocity << " μm/ps\n";
   std::cout << "Mean heat flux:   " << result.heat_flux_2d << " W/m (2D sheet)\n";
