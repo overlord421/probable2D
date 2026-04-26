@@ -98,6 +98,31 @@ double Material::mean_excess_energy_at_temperature(double T) const {
   return weighted_energy / weight_sum;
 }
 
+double Material::mean_flux_excess_energy_at_temperature(double T) const {
+  double m_eff = (mx + my) / 2;
+  double p_max = 6 * sqrt(2 * m_eff * consts::kB * T);
+  const int grid = 72;
+  double weighted_energy = 0;
+  double weight_sum = 0;
+
+  for (int ix = 0; ix < grid; ++ix) {
+    double px = p_max * (ix + 0.5) / grid;
+    for (int iy = 0; iy < grid; ++iy) {
+      double py = p_max * (-1 + 2.0 * (iy + 0.5) / grid);
+      Vec2 p{px, py};
+      double E = energy(p);
+      double weight = velocity(p).x * std::exp(-E / (consts::kB * T));
+      weighted_energy += (E - Delta) * weight;
+      weight_sum += weight;
+    }
+  }
+
+  if (weight_sum == 0) {
+    return 0;
+  }
+  return weighted_energy / weight_sum;
+}
+
 double Material::temperature_from_mean_excess_energy(double mean_excess, double T_min, double T_max) const {
   if (mean_excess <= 0) {
     return T_min;
@@ -112,6 +137,28 @@ double Material::temperature_from_mean_excess_energy(double mean_excess, double 
   for (int i = 0; i < 48; ++i) {
     double mid = 0.5 * (low + high);
     if (mean_excess_energy_at_temperature(mid) < mean_excess) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return 0.5 * (low + high);
+}
+
+double Material::temperature_from_mean_flux_excess_energy(double mean_excess, double T_min, double T_max) const {
+  if (mean_excess <= 0) {
+    return T_min;
+  }
+
+  double high = T_max;
+  for (int i = 0; i < 8 && mean_flux_excess_energy_at_temperature(high) < mean_excess; ++i) {
+    high *= 2;
+  }
+
+  double low = T_min;
+  for (int i = 0; i < 48; ++i) {
+    double mid = 0.5 * (low + high);
+    if (mean_flux_excess_energy_at_temperature(mid) < mean_excess) {
       low = mid;
     } else {
       high = mid;

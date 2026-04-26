@@ -124,8 +124,12 @@ struct Material {
   }
 
   double mean_excess_energy_at_temperature(double T) const;
+
+  double mean_flux_excess_energy_at_temperature(double T) const;
   
   double temperature_from_mean_excess_energy(double mean_excess, double T_min, double T_max) const;
+
+  double temperature_from_mean_flux_excess_energy(double mean_excess, double T_min, double T_max) const;
 };
 
 struct Scattering {

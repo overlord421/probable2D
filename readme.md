@@ -18,3 +18,6 @@ temperature of particles injected from the left and right thermostats.
 Temperature and flux tallies skip the first 20% of time steps as burn-in.
 Flux history in `output/heat_flux_kappa_avg.txt` is accumulated in at most 1000
 time windows instead of storing every particle step.
+Optical phonon scattering includes both emission and absorption with Bose
+factors, and boundary injection diagnostics use flux-weighted temperature
+reconstruction.

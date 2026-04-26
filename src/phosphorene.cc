@@ -49,32 +49,57 @@ struct AcousticScattering : public Scattering {
   }
 };
 
-// Испускание оптического фонона
-struct OpticalEmissionScattering : public Scattering {
+struct OpticalScattering : public Scattering {
   double constant;
   double Do;
+  double phonon_energy;
   
-  OpticalEmissionScattering(const Material &m, double Do_, double phonon_energy)
-      : Scattering(m, phonon_energy), Do(Do_) {
-    double omega0 = phonon_energy / consts::hbar;
+  OpticalScattering(const Material &m, double Do_, double phonon_energy_, double signed_energy_transfer)
+      : Scattering(m, signed_energy_transfer), Do(Do_), phonon_energy(phonon_energy_) {
+    double omega0 = phonon_energy_ / consts::hbar;
     
     // W_op = (D_o² E) / (π ℏ² ρ ω₀) * √((2 m_x m_y)/Δ(Δ+E)) * K((Δ-E)/(Δ+E))
     // Константа без E (E будет в rate())
     constant = Do * Do / (math::pi * std::pow(consts::hbar, 2) * density * omega0);
   }
-  
-  double rate(const Vec2 &p, double x) const override {
-    double E = m.energy(p) - energy;
-    if (E < m.Delta) return 0;
-    
-    double Dplus = m.Delta + E;
-    double Dminus = m.Delta - E;
+
+  double final_state_factor(double final_E) const {
+    double Dplus = m.Delta + final_E;
+    double Dminus = m.Delta - final_E;
     
     double sqrt_term = std::sqrt((2 * m.mx * m.my) / (m.Delta * Dplus));
     double k_param = Dminus / Dplus;
     double K = math::comp_ellint_1(k_param);
     
-    return constant * E * sqrt_term * K;
+    return final_E * sqrt_term * K;
+  }
+
+  double bose(double T) const {
+    return 1.0 / std::expm1(phonon_energy / (consts::kB * T));
+  }
+};
+
+// Испускание оптического фонона
+struct OpticalEmissionScattering : public OpticalScattering {
+  OpticalEmissionScattering(const Material &m, double Do_, double phonon_energy)
+      : OpticalScattering(m, Do_, phonon_energy, phonon_energy) {}
+  
+  double rate(const Vec2 &p, double x) const override {
+    double E = m.energy(p) - energy;
+    if (E < m.Delta) return 0;
+    return constant * final_state_factor(E) * (bose(m.get_temperature(x)) + 1);
+  }
+};
+
+// Поглощение оптического фонона
+struct OpticalAbsorptionScattering : public OpticalScattering {
+  OpticalAbsorptionScattering(const Material &m, double Do_, double phonon_energy)
+      : OpticalScattering(m, Do_, phonon_energy, -phonon_energy) {}
+  
+  double rate(const Vec2 &p, double x) const override {
+    double E = m.energy(p) - energy;
+    if (E < m.Delta) return 0;
+    return constant * final_state_factor(E) * bose(m.get_temperature(x));
   }
 };
 
@@ -141,7 +166,7 @@ void write_boundary_injection_temperature(const std::string &path,
 
   double left_mean = left_samples > 0 ? left_excess_energy / left_samples : 0;
   double left_T = left_samples > 0
-      ? material.temperature_from_mean_excess_energy(left_mean, T_min, T_max)
+      ? material.temperature_from_mean_flux_excess_energy(left_mean, T_min, T_max)
       : 0;
   out << "left "
       << T_left / units::K << " "
@@ -151,7 +176,7 @@ void write_boundary_injection_temperature(const std::string &path,
 
   double right_mean = right_samples > 0 ? right_excess_energy / right_samples : 0;
   double right_T = right_samples > 0
-      ? material.temperature_from_mean_excess_energy(right_mean, T_min, T_max)
+      ? material.temperature_from_mean_flux_excess_energy(right_mean, T_min, T_max)
       : 0;
   out << "right "
       << T_right / units::K << " "
@@ -194,6 +219,11 @@ int main(int argc, char const *argv[]) {
       sound_velocity
     ),
     new OpticalEmissionScattering(
+      phosphorene,
+      5.67e10 * units::eV / units::m, // TO2
+      56e-3 * units::eV
+    ),
+    new OpticalAbsorptionScattering(
       phosphorene,
       5.67e10 * units::eV / units::m, // TO2
       56e-3 * units::eV
