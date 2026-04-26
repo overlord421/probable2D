@@ -186,9 +186,9 @@ void write_boundary_injection_temperature(const std::string &path,
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc != 8) {
+  if (argc != 8 && argc != 9) {
     std::cout << "Invalid number of arguments\n";
-    std::cout << "Usage: " << argv[0] << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time>\n";
+    std::cout << "Usage: " << argv[0] << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis=x|y]\n";
     return 1;
   }
 
@@ -199,6 +199,10 @@ int main(int argc, char const *argv[]) {
                       parse<double>(argv[5]) * units::V / units::m};
   double magnetic_field_z = parse<double>(argv[6]) * units::T;
   double all_time = parse<double>(argv[7]) * units::s;
+  char thermal_axis = 'x';
+  if (argc == 9) {
+    thermal_axis = argv[8][0] == 'y' || argv[8][0] == 'Y' ? 'y' : 'x';
+  }
 
   Material phosphorene{
     1.285 * consts::me, // mx (ZZ)
@@ -208,7 +212,8 @@ int main(int argc, char const *argv[]) {
     Ly,
     Nx, 
     T_left,
-    T_right
+    T_right,
+    thermal_axis
   };
   
   // Вектор механизмов рассеяния
@@ -236,6 +241,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Ensemble size:    " << ensemble_size << "\n";
   std::cout << "X length:         " << Lx / units::m << " m\n";
   std::cout << "Y length:         " << Ly / units::m << " m\n";
+  std::cout << "Thermal axis:     " << phosphorene.thermal_axis << "\n";
   std::cout << "Time step:        " << time_step / units::s << " s\n";
   std::cout << "Simulation time:  " << all_time / units::s << " s\n";
   std::cout << "Temperature left: " << T_left / units::K << " K\n";
@@ -304,7 +310,7 @@ int main(int argc, char const *argv[]) {
   // сохранение оценок теплового потока и kappa в файл
   std::filesystem::create_directories("../output");
   std::ofstream flux_file("../output/heat_flux_kappa_avg.txt");
-  double gradT = ((T_right - T_left) / units::K) / (Lx / units::m);
+  double gradT = ((T_right - T_left) / units::K) / (phosphorene.axis_length() / units::m);
   double heat_flux_unit_2d = units::J / units::s / units::m;
   size_t flux_windows = results.empty() ? 0 : results[0].flux_window_samples.size();
   size_t flux_stride = results.empty() ? 1 : results[0].flux_sample_stride;

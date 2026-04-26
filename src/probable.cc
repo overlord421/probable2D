@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <random>
 #if __has_include(<omp.h>)
@@ -28,18 +29,32 @@ Vec2 Material::create_particle_at_temperature(double T) const {
 Vec2 Material::create_flux_particle_at_temperature(double T, double sign) const {
   double m_eff = (mx + my) / 2;
   double p_max = 5 * sqrt(2 * m_eff * consts::kB * T);
-  double v_max = std::sqrt(Delta / mx);
+  double v_max = 0;
+  for (int i = 1; i <= 64; ++i) {
+    Vec2 p_probe;
+    if (thermal_axis == 'y') {
+      p_probe = {0, p_max * sign * i / 64.0};
+    } else {
+      p_probe = {p_max * sign * i / 64.0, 0};
+    }
+    v_max = std::max(v_max, sign * velocity_component(velocity(p_probe)));
+  }
   double boltzmann_floor = std::exp(-Delta / (consts::kB * T));
 
   while (true) {
-    Vec2 p{p_max * sign * uniform(), p_max * (-1 + uniform() * 2)};
-    double incoming_vx = sign * velocity(p).x;
-    if (incoming_vx <= 0) {
+    Vec2 p;
+    if (thermal_axis == 'y') {
+      p = {p_max * (-1 + uniform() * 2), p_max * sign * uniform()};
+    } else {
+      p = {p_max * sign * uniform(), p_max * (-1 + uniform() * 2)};
+    }
+    double incoming_v = sign * velocity_component(velocity(p));
+    if (incoming_v <= 0) {
       continue;
     }
 
     double prob = uniform() * v_max * boltzmann_floor;
-    double weight = incoming_vx * std::exp(-energy(p) / (consts::kB * T));
+    double weight = incoming_v * std::exp(-energy(p) / (consts::kB * T));
     if (prob < weight) {
       return p;
     }
@@ -50,21 +65,30 @@ Pos2D Material::create_initial_position() const {
   return {uniform() * Lx, uniform() * Ly};  // равномерно от 0 до Lx
 }
 
-int Material::apply_boundary(double &x, Vec2 &p) const {
+int Material::apply_boundary(Pos2D &r, Vec2 &p) const {
   double T = -1;
   double sign = 0;
   int side = 0;
+  double coord = axis_coordinate(r);
   
-  if (x < 0) {
-    x = 0;
+  if (coord < 0) {
     T = T_left;
     sign = 1;
     side = -1;
-  } else if (x > Lx) {
-    x = Lx;
+    if (thermal_axis == 'y') {
+      r.y = 0;
+    } else {
+      r.x = 0;
+    }
+  } else if (coord > axis_length()) {
     T = T_right;
     sign = -1;
     side = 1;
+    if (thermal_axis == 'y') {
+      r.y = Ly;
+    } else {
+      r.x = Lx;
+    }
   }
     
   if (T != -1) {
@@ -106,12 +130,16 @@ double Material::mean_flux_excess_energy_at_temperature(double T) const {
   double weight_sum = 0;
 
   for (int ix = 0; ix < grid; ++ix) {
-    double px = p_max * (ix + 0.5) / grid;
+    double px = thermal_axis == 'y'
+        ? p_max * (-1 + 2.0 * (ix + 0.5) / grid)
+        : p_max * (ix + 0.5) / grid;
     for (int iy = 0; iy < grid; ++iy) {
-      double py = p_max * (-1 + 2.0 * (iy + 0.5) / grid);
+      double py = thermal_axis == 'y'
+          ? p_max * (iy + 0.5) / grid
+          : p_max * (-1 + 2.0 * (iy + 0.5) / grid);
       Vec2 p{px, py};
       double E = energy(p);
-      double weight = velocity(p).x * std::exp(-E / (consts::kB * T));
+      double weight = velocity_component(velocity(p)) * std::exp(-E / (consts::kB * T));
       weighted_energy += (E - Delta) * weight;
       weight_sum += weight;
     }
@@ -302,8 +330,8 @@ std::vector<Results> simulate(const Material &material,
     result.initial_bin_excess_energy.assign(material.Nx, 0);
     result.initial_bin_samples.assign(material.Nx, 0);
     Pos2D r = material.create_initial_position();
-    Vec2 p = material.create_particle_at_temperature(material.get_temperature(r.x));
-    int initial_bin = material.get_cell_index(r.x);
+    Vec2 p = material.create_particle_at_temperature(material.get_temperature(material.axis_coordinate(r)));
+    int initial_bin = material.get_cell_index(material.axis_coordinate(r));
     result.initial_bin_excess_energy[initial_bin] += material.energy(p) - material.Delta;
     result.initial_bin_samples[initial_bin] += 1;
     std::vector<double> free_flight(mechanisms.size(), 0);
@@ -315,21 +343,27 @@ std::vector<Results> simulate(const Material &material,
       Vec2 p_ = p;
       Vec2 v = material.velocity(p_);
       double e = material.energy(p_);
-      double x_old = r.x;
+      double coord_old = material.axis_coordinate(r);
       size_t scattering_mechanism = 0; // means no scattering
-      double heat = (e - material.Delta) * v.x;
+      double v_axis = material.velocity_component(v);
+      double heat = (e - material.Delta) * v_axis;
       bool tally = j >= tally_start_step;
       if (tally) {
-        int bin = material.get_cell_index(x_old);
+        int bin = material.get_cell_index(coord_old);
         result.bin_excess_energy[bin] += e - material.Delta;
         result.bin_samples[bin] += 1;
       }
 
       r.y += v.y * time_step;
       r.x += v.x * time_step;
-      if (r.y < 0) r.y += material.Ly;
-      if (r.y >= material.Ly) r.y -= material.Ly;
-      int injected_side = material.apply_boundary(r.x, p);
+      if (material.thermal_axis == 'y') {
+        if (r.x < 0) r.x += material.Lx;
+        if (r.x >= material.Lx) r.x -= material.Lx;
+      } else {
+        if (r.y < 0) r.y += material.Ly;
+        if (r.y >= material.Ly) r.y -= material.Ly;
+      }
+      int injected_side = material.apply_boundary(r, p);
       if (injected_side < 0) {
         result.injected_left_excess_energy += material.energy(p) - material.Delta;
         result.injected_left_samples += 1;
@@ -340,7 +374,7 @@ std::vector<Results> simulate(const Material &material,
       p += -consts::e * (electric_field + v.cross_with_B(magnetic_field_z)) * time_step;
 
       for (size_t k = 0; k < mechanisms.size(); ++k) {
-        free_flight[k] -= mechanisms[k]->rate(p, r.x) * time_step;
+        free_flight[k] -= mechanisms[k]->rate(p, material.axis_coordinate(r)) * time_step;
         if (free_flight[k] < 0) {
           p = mechanisms[k]->scatter(p);
           free_flight[k] = -log(uniform());
@@ -349,7 +383,7 @@ std::vector<Results> simulate(const Material &material,
         }
       }
       if (tally) {
-        result.append(j, j * time_step, p_, v, e, scattering_mechanism, x_old, heat, v.x);
+        result.append(j, j * time_step, p_, v, e, scattering_mechanism, coord_old, heat, v_axis);
       } else {
         if (scattering_mechanism) {
           result.scattering_count[scattering_mechanism - 1] += 1;

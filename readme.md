@@ -10,6 +10,9 @@ Build:
 Portable build without OpenMP:
 `g++ -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`
 
+Run with an optional thermal axis argument (`x` by default, or `y`):
+`./phosphorene <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis]`
+
 The reworked kappa branch also writes `output/initial_temperature_profile.txt`
 and `output/local_temperature_profile.txt` with temperature profiles reconstructed
 from binned carrier energy.

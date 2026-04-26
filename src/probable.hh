@@ -82,11 +82,13 @@ struct Material {
   int Nx;                    // количество ячеек
   double cell_size;          // Lx / Nx
   double T_left, T_right;    // Температура на краях
+  char thermal_axis;         // 'x' or 'y'
   
   Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0, 
-           double Ly_ = 0, int Nx_ = 1, double T_l = 0, double T_r = 0) 
+           double Ly_ = 0, int Nx_ = 1, double T_l = 0, double T_r = 0, char axis_ = 'x') 
     : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Ly(Ly_), Nx(Nx_), 
-      cell_size(Lx_ / Nx_), T_left(T_l), T_right(T_r) {}
+      cell_size((axis_ == 'y' ? Ly_ : Lx_) / Nx_), T_left(T_l), T_right(T_r),
+      thermal_axis(axis_ == 'y' ? 'y' : 'x') {}
   
   double energy(const Vec2 &p) const {
     // ϵ(p) = √((Δ p_x²)/m_x + (Δ + p_y²/(2m_y))²)
@@ -110,7 +112,27 @@ struct Material {
   Pos2D create_initial_position() const;
   
   // Отражающие граничные условия
-  int apply_boundary(double &x, Vec2 &p) const;
+  int apply_boundary(Pos2D &r, Vec2 &p) const;
+
+  double axis_length() const {
+    return thermal_axis == 'y' ? Ly : Lx;
+  }
+
+  double transverse_length() const {
+    return thermal_axis == 'y' ? Lx : Ly;
+  }
+
+  double axis_coordinate(const Pos2D &r) const {
+    return thermal_axis == 'y' ? r.y : r.x;
+  }
+
+  double transverse_coordinate(const Pos2D &r) const {
+    return thermal_axis == 'y' ? r.x : r.y;
+  }
+
+  double velocity_component(const Vec2 &v) const {
+    return thermal_axis == 'y' ? v.y : v.x;
+  }
   
   // получение индекса ячейки
   int get_cell_index(double x) const {
@@ -119,8 +141,8 @@ struct Material {
     return static_cast<int>(x / cell_size);
   }
   
-  double get_temperature(double x) const {
-    return T_left + (T_right - T_left) * (x / Lx);
+  double get_temperature(double coord) const {
+    return T_left + (T_right - T_left) * (coord / axis_length());
   }
 
   double mean_excess_energy_at_temperature(double T) const;
