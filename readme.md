@@ -13,6 +13,11 @@ Portable build without OpenMP:
 Run with an optional thermal axis argument (`x` by default, or `y`):
 `./phosphorene <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis]`
 
+For `axis=x`, thermostats are placed at `x=0` and `x=Lx`, the temperature
+profile and heat flux are measured along `x`, and `y` is periodic. For
+`axis=y`, thermostats are placed at `y=0` and `y=Ly`, the profile and heat flux
+are measured along `y`, and `x` is periodic.
+
 The reworked kappa branch also writes `output/initial_temperature_profile.txt`
 and `output/local_temperature_profile.txt` with temperature profiles reconstructed
 from binned carrier energy.
