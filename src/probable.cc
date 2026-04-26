@@ -237,7 +237,9 @@ std::vector<Results> simulate(const Material &material,
   if (flags == DumpFlags(DumpFlags::heat_flux | DumpFlags::particle_flux)) {
     alloc = 0;
   }
-  size_t flux_sample_stride = 100;
+  size_t max_flux_windows = 1000;
+  size_t adaptive_flux_stride = (steps + max_flux_windows - 1) / max_flux_windows;
+  size_t flux_sample_stride = adaptive_flux_stride > 100 ? adaptive_flux_stride : 100;
   size_t flux_windows = (steps + flux_sample_stride - 1) / flux_sample_stride;
   size_t tally_start_step = steps / 5;
 #pragma omp parallel for

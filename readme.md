@@ -16,5 +16,5 @@ from binned carrier energy.
 `output/boundary_injection_temperature.txt` reports the reconstructed
 temperature of particles injected from the left and right thermostats.
 Temperature and flux tallies skip the first 20% of time steps as burn-in.
-Flux history in `output/heat_flux_kappa_avg.txt` is accumulated in time windows
-instead of storing every particle step.
+Flux history in `output/heat_flux_kappa_avg.txt` is accumulated in at most 1000
+time windows instead of storing every particle step.
