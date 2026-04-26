@@ -5,10 +5,10 @@
 <br>
 
 Build:  
-`g++ -fopenmp -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`
+`g++ -fopenmp -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc kappa_runner.cc -lm -lstdc++`
 
 Portable build without OpenMP:
-`g++ -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc -lm -lstdc++`
+`g++ -O2 -I. -std=c++17 -o phosphorene phosphorene.cc probable.cc kappa_runner.cc -lm -lstdc++`
 
 Run with an optional thermal axis argument (`x` by default, or `y`):
 `./phosphorene <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis]`
@@ -17,6 +17,17 @@ For `axis=x`, thermostats are placed at `x=0` and `x=Lx`, the temperature
 profile and heat flux are measured along `x`, and `y` is periodic. For
 `axis=y`, thermostats are placed at `y=0` and `y=Ly`, the profile and heat flux
 are measured along `y`, and `x` is periodic.
+
+Reusable code for new materials:
+- `probable.hh` / `probable.cc`: EMC core, geometry, particle motion, boundary
+  thermostats, and generic `Scattering` interface.
+- `kappa_runner.hh` / `kappa_runner.cc`: common kappa workflow, ensemble
+  averaging, flux history, temperature profiles, and output files.
+- `gapped2d_scattering.hh`: reusable acoustic and optical phonon mechanisms for
+  the current anisotropic gapped 2D dispersion. A new material can reuse these
+  classes with different constants, or provide its own `Scattering` subclasses.
+- `phosphorene.cc`: phosphorene-specific constants, material construction, and
+  mechanism list.
 
 The reworked kappa branch also writes `output/initial_temperature_profile.txt`
 and `output/local_temperature_profile.txt` with temperature profiles reconstructed
