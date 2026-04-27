@@ -109,6 +109,9 @@ KappaRunResult run_kappa_simulation(const Material &material,
   double avg_heat_flux = 0;
   double avg_particle_flux = 0;
   size_t flux_samples = 0;
+  double kappa_mean = 0;
+  double kappa_m2 = 0;
+  size_t kappa_samples = 0;
   std::vector<double> bin_excess_energy(material.Nx, 0);
   std::vector<uint64_t> bin_samples(material.Nx, 0);
   std::vector<double> initial_bin_excess_energy(material.Nx, 0);
@@ -153,16 +156,40 @@ KappaRunResult run_kappa_simulation(const Material &material,
   std::ofstream flux_file(config.output_dir + "/heat_flux_kappa_avg.txt");
   double gradT = ((material.T_right - material.T_left) / units::K) / (material.axis_length() / units::m);
   double heat_flux_unit_2d = units::J / units::s / units::m;
+  for (size_t i = 0; i < results.size(); ++i) {
+    if (results[i].flux_samples == 0) {
+      continue;
+    }
+    double heat_flux_2d =
+        (results[i].heat_flux_sum / results[i].flux_samples) * config.carrier_density_2d / heat_flux_unit_2d;
+    double kappa_2d = -heat_flux_2d / gradT;
+    ++kappa_samples;
+    double delta = kappa_2d - kappa_mean;
+    kappa_mean += delta / kappa_samples;
+    kappa_m2 += delta * (kappa_2d - kappa_mean);
+  }
   size_t flux_windows = results.empty() ? 0 : results[0].flux_window_samples.size();
   size_t flux_stride = results.empty() ? 1 : results[0].flux_sample_stride;
   for (size_t j = 0; j < flux_windows; ++j) {
     double sum_heat_flux = 0;
     double sum_particle_flux = 0;
     uint64_t window_samples = 0;
+    double window_kappa_mean = 0;
+    double window_kappa_m2 = 0;
+    size_t window_kappa_samples = 0;
     for (size_t i = 0; i < results.size(); ++i) {
       sum_heat_flux += results[i].heat_flux_windows[j];
       sum_particle_flux += results[i].particle_flux_windows[j];
       window_samples += results[i].flux_window_samples[j];
+      if (results[i].flux_window_samples[j] > 0) {
+        double heat_flux_2d = (results[i].heat_flux_windows[j] / results[i].flux_window_samples[j])
+            * config.carrier_density_2d / heat_flux_unit_2d;
+        double kappa_2d = -heat_flux_2d / gradT;
+        ++window_kappa_samples;
+        double delta = kappa_2d - window_kappa_mean;
+        window_kappa_mean += delta / window_kappa_samples;
+        window_kappa_m2 += delta * (kappa_2d - window_kappa_mean);
+      }
     }
     if (window_samples == 0) {
       continue;
@@ -170,7 +197,14 @@ KappaRunResult run_kappa_simulation(const Material &material,
     double heat_flux_2d = (sum_heat_flux / window_samples) * config.carrier_density_2d / heat_flux_unit_2d;
     double particle_flux_2d = (sum_particle_flux / window_samples) * config.carrier_density_2d;
     double kappa_2d = -heat_flux_2d / gradT;
-    flux_file << j * flux_stride << " " << heat_flux_2d << " " << particle_flux_2d << " " << kappa_2d << "\n";
+    double kappa_std_2d = window_kappa_samples > 1
+        ? std::sqrt(window_kappa_m2 / (window_kappa_samples - 1))
+        : 0;
+    flux_file << j * flux_stride << " "
+              << heat_flux_2d << " "
+              << particle_flux_2d << " "
+              << kappa_2d << " "
+              << kappa_std_2d << "\n";
   }
 
   write_temperature_profile(config.output_dir + "/initial_temperature_profile.txt",
@@ -191,6 +225,7 @@ KappaRunResult run_kappa_simulation(const Material &material,
   result.heat_flux_2d = avg_heat_flux * config.carrier_density_2d / heat_flux_unit_2d;
   result.particle_flux_2d = avg_particle_flux * config.carrier_density_2d;
   result.kappa_2d = -result.heat_flux_2d / gradT;
+  result.kappa_std_2d = kappa_samples > 1 ? std::sqrt(kappa_m2 / (kappa_samples - 1)) : 0;
 
   return result;
 }
@@ -259,12 +294,13 @@ KappaRunResult run_open_circuit_kappa_simulation(const Material &material,
 
   std::filesystem::create_directories(final_output_dir);
   std::ofstream fit_file(final_output_dir + "/seebeck_field_fit.txt");
-  fit_file << "# E_axis_V_per_m particle_flux_1_per_um_ps heat_flux_W_per_m kappa_W_per_K\n";
+  fit_file << "# E_axis_V_per_m particle_flux_1_per_um_ps heat_flux_W_per_m kappa_W_per_K kappa_std_W_per_K\n";
   for (auto &result : trial_results) {
     fit_file << result.seebeck_field_axis / units::V * units::m << " "
              << result.particle_flux_2d << " "
              << result.heat_flux_2d << " "
-             << result.kappa_2d << "\n";
+             << result.kappa_2d << " "
+             << result.kappa_std_2d << "\n";
   }
 
   trial.output_dir = final_output_dir;

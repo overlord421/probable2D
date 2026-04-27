@@ -143,6 +143,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Mean heat flux:   " << result.heat_flux_2d << " W/m (2D sheet)\n";
   std::cout << "Particle flux:    " << result.particle_flux_2d << " 1/(μm·ps)\n";
   std::cout << "Kappa 2D:         " << result.kappa_2d << " W/K\n";
+  std::cout << "Kappa 2D std:     " << result.kappa_std_2d << " W/K\n";
   std::cout << "Scattering rates: " << result.scattering_rates << " 1/s\n";
   std::cout << "           Total: " << sum(result.scattering_rates) << " 1/s\n";
   std::cout << "Scattering count: " << result.scattering_counts << " times\n";

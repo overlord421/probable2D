@@ -29,6 +29,7 @@ struct KappaRunResult {
   double heat_flux_2d = 0;
   double particle_flux_2d = 0;
   double kappa_2d = 0;
+  double kappa_std_2d = 0;
   Vec2 electric_field;
   double seebeck_field_axis = 0;
 };
