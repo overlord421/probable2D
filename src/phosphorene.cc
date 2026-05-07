@@ -3,6 +3,7 @@
 #include <string>
 
 #include <gapped2d_scattering.hh>
+#include <green_kubo_runner.hh>
 #include <kappa_runner.hh>
 #include <probable.hh>
 
@@ -40,10 +41,11 @@ template <typename T> T sum(std::vector<T> t) {
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc < 8 || argc > 10) {
+  if (argc < 8 || argc > 11) {
     std::cout << "Invalid number of arguments\n";
     std::cout << "Usage: " << argv[0]
-              << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis=x|y] [--seebeck]\n";
+              << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time>"
+              << " [axis=x|y] [--seebeck|--green-kubo]\n";
     return 1;
   }
 
@@ -56,6 +58,7 @@ int main(int argc, char const *argv[]) {
   double all_time = parse<double>(argv[7]) * units::s;
   char thermal_axis = 'x';
   bool tune_seebeck_field = false;
+  bool green_kubo = false;
   for (int i = 8; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "y" || arg == "Y" || arg == "axis=y") {
@@ -64,11 +67,21 @@ int main(int argc, char const *argv[]) {
       thermal_axis = 'x';
     } else if (arg == "--seebeck" || arg == "seebeck") {
       tune_seebeck_field = true;
+    } else if (arg == "--green-kubo" || arg == "--gk" || arg == "green-kubo" || arg == "gk") {
+      green_kubo = true;
     } else {
       std::cout << "Unknown optional argument: " << arg << "\n";
       return 1;
     }
   }
+  if (green_kubo && tune_seebeck_field) {
+    std::cout << "--green-kubo and --seebeck are separate kappa estimators; choose one mode\n";
+    return 1;
+  }
+
+  double equilibrium_temperature = 0.5 * (T_left + T_right);
+  double material_T_left = green_kubo ? equilibrium_temperature : T_left;
+  double material_T_right = green_kubo ? equilibrium_temperature : T_right;
 
   Material phosphorene{
     1.285 * consts::me, // mx (ZZ)
@@ -77,8 +90,8 @@ int main(int argc, char const *argv[]) {
     Lx,
     Ly,
     Nx, 
-    T_left,
-    T_right,
+    material_T_left,
+    material_T_right,
     thermal_axis
   };
   
@@ -115,13 +128,46 @@ int main(int argc, char const *argv[]) {
   std::cout << "Simulation time:  " << all_time / units::s << " s\n";
   std::cout << "Temperature left: " << T_left / units::K << " K\n";
   std::cout << "Temperature right:" << T_right / units::K << " K\n";
+  if (green_kubo) {
+    std::cout << "Equilibrium T:    " << equilibrium_temperature / units::K << " K\n";
+  }
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
   std::cout << "Seebeck fitting:  " << (tune_seebeck_field ? "on" : "off") << "\n";
+  std::cout << "Green-Kubo mode:  " << (green_kubo ? "on" : "off") << "\n";
   std::cout << "Magnetic field:   " << magnetic_field_z / units::T << " T\n";
   std::cout << "Scattering mechanisms:\n";
   for (size_t i = 0; i < mechanisms.size(); ++i) {
     std::cout << "  " << i + 1 << ": " << *mechanisms[i] << '\n';
   }
+  if (green_kubo) {
+    GreenKuboConfig config{
+      ensemble_size,
+      electric_field,
+      magnetic_field_z,
+      all_time,
+      time_step,
+      carrier_density_2d,
+      equilibrium_temperature,
+      "../output"
+    };
+    GreenKuboRunResult result = run_green_kubo_simulation(phosphorene, mechanisms, config);
+
+    std::cout << "\n===== Green-Kubo Results =====\n";
+    std::cout << "      Directions: {ZZ, AC}\n";
+    std::cout << "Correlation samples: " << result.samples << "\n";
+    std::cout << "Correlation lags:    " << result.correlation_lags << "\n";
+    std::cout << "Mean heat flux:      " << result.heat_flux_2d << " W/m (2D sheet)\n";
+    std::cout << "Particle flux:       " << result.particle_flux_2d << " 1/(μm·ps)\n";
+    std::cout << "GK Kappa 2D:         " << result.kappa_2d << " W/K\n";
+    std::cout << "GK Kappa 2D std:     " << result.kappa_std_2d << " W/K\n";
+    std::cout << "GK Kappa J=0 2D:     " << result.kappa_j0_2d << " W/K\n";
+    std::cout << "GK Kappa J=0 std:    " << result.kappa_j0_std_2d << " W/K\n";
+    std::cout << "Scattering rates:    " << result.scattering_rates << " 1/s\n";
+    std::cout << "           Total:    " << sum(result.scattering_rates) << " 1/s\n";
+    std::cout << "Scattering count:    " << result.scattering_counts << " times\n";
+    return 0;
+  }
+
   KappaRunConfig config{
     ensemble_size,
     electric_field,
@@ -133,7 +179,7 @@ int main(int argc, char const *argv[]) {
   };
   config.tune_seebeck_field = tune_seebeck_field;
   KappaRunResult result = run_open_circuit_kappa_simulation(phosphorene, mechanisms, config);
-  
+
   std::cout << "\n===== Results =====\n";
   std::cout << "      Directions: {ZZ, AC}\n";
   std::cout << "Electric field:   " << result.electric_field / units::V * units::m << " V/m\n";
