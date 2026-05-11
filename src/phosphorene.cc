@@ -41,11 +41,13 @@ template <typename T> T sum(std::vector<T> t) {
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc < 8 || argc > 11) {
+  if (argc < 8) {
     std::cout << "Invalid number of arguments\n";
     std::cout << "Usage: " << argv[0]
               << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time>"
-              << " [axis=x|y] [--seebeck|--green-kubo]\n";
+              << " [axis=x|y] [--seebeck|--green-kubo] [--fermi-dirac]"
+              << " [--density-cm2=value] [--optical-energy-mev=value]"
+              << " [--acoustic-da-ev=value] [--optical-do-ev-m=value]\n";
     return 1;
   }
 
@@ -60,6 +62,10 @@ int main(int argc, char const *argv[]) {
   bool tune_seebeck_field = false;
   bool green_kubo = false;
   bool use_fermi_dirac = false;
+  double run_carrier_density_2d = carrier_density_2d;
+  double run_acoustic_deformation_potential = acoustic_deformation_potential;
+  double run_optical_deformation_potential = 5.67e10 * units::eV / units::m;
+  double run_optical_phonon_energy = 56e-3 * units::eV;
   for (int i = 8; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "y" || arg == "Y" || arg == "axis=y") {
@@ -72,6 +78,18 @@ int main(int argc, char const *argv[]) {
       green_kubo = true;
     } else if (arg == "--fermi-dirac" || arg == "--fd" || arg == "fermi-dirac" || arg == "fd") {
       use_fermi_dirac = true;
+    } else if (arg.rfind("--density-cm2=", 0) == 0 || arg.rfind("--carrier-density-cm2=", 0) == 0) {
+      std::string value = arg.substr(arg.find('=') + 1);
+      run_carrier_density_2d = parse<double>(value) * 1e4 / units::m / units::m;
+    } else if (arg.rfind("--optical-energy-mev=", 0) == 0) {
+      std::string value = arg.substr(arg.find('=') + 1);
+      run_optical_phonon_energy = parse<double>(value) * 1e-3 * units::eV;
+    } else if (arg.rfind("--acoustic-da-ev=", 0) == 0) {
+      std::string value = arg.substr(arg.find('=') + 1);
+      run_acoustic_deformation_potential = parse<double>(value) * units::eV;
+    } else if (arg.rfind("--optical-do-ev-m=", 0) == 0) {
+      std::string value = arg.substr(arg.find('=') + 1);
+      run_optical_deformation_potential = parse<double>(value) * units::eV / units::m;
     } else {
       std::cout << "Unknown optional argument: " << arg << "\n";
       return 1;
@@ -97,7 +115,7 @@ int main(int argc, char const *argv[]) {
     material_T_right,
     thermal_axis,
     use_fermi_dirac,
-    carrier_density_2d
+    run_carrier_density_2d
   };
   
   // Вектор механизмов рассеяния
@@ -105,20 +123,20 @@ int main(int argc, char const *argv[]) {
     new AcousticScattering(
       phosphorene,
       density,
-      acoustic_deformation_potential,
+      run_acoustic_deformation_potential,
       sound_velocity
     ),
     new OpticalEmissionScattering(
       phosphorene,
       density,
-      5.67e10 * units::eV / units::m, // TO2
-      56e-3 * units::eV
+      run_optical_deformation_potential, // TO2
+      run_optical_phonon_energy
     ),
     new OpticalAbsorptionScattering(
       phosphorene,
       density,
-      5.67e10 * units::eV / units::m, // TO2
-      56e-3 * units::eV
+      run_optical_deformation_potential, // TO2
+      run_optical_phonon_energy
     )
   };
 
@@ -136,6 +154,10 @@ int main(int argc, char const *argv[]) {
   if (green_kubo) {
     std::cout << "Equilibrium T:    " << equilibrium_temperature / units::K << " K\n";
   }
+  std::cout << "Carrier density:  " << run_carrier_density_2d * units::m * units::m / 1e4 << " cm^-2\n";
+  std::cout << "Acoustic Da:      " << run_acoustic_deformation_potential / units::eV << " eV\n";
+  std::cout << "Optical Do:       " << run_optical_deformation_potential / units::eV * units::m << " eV/m\n";
+  std::cout << "Optical phonon:   " << run_optical_phonon_energy / units::eV * 1e3 << " meV\n";
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
   std::cout << "Seebeck fitting:  " << (tune_seebeck_field ? "on" : "off") << "\n";
   std::cout << "Green-Kubo mode:  " << (green_kubo ? "on" : "off") << "\n";
@@ -155,7 +177,7 @@ int main(int argc, char const *argv[]) {
       magnetic_field_z,
       all_time,
       time_step,
-      carrier_density_2d,
+      run_carrier_density_2d,
       equilibrium_temperature,
       "../output"
     };
@@ -183,7 +205,7 @@ int main(int argc, char const *argv[]) {
     magnetic_field_z,
     all_time,
     time_step,
-    carrier_density_2d,
+    run_carrier_density_2d,
     "../output"
   };
   config.tune_seebeck_field = tune_seebeck_field;
