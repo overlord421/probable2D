@@ -12,7 +12,7 @@ Portable build without OpenMP:
 
 Run with optional thermal axis, open-circuit Seebeck field fitting, or
 equilibrium Green-Kubo kappa:
-`./phosphorene <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis] [--seebeck|--green-kubo]`
+`./phosphorene <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis] [--seebeck|--green-kubo] [--fermi-dirac]`
 
 For `axis=x`, thermostats are placed at `x=0` and `x=Lx`, the temperature
 profile and heat flux are measured along `x`, and `y` is periodic. For
@@ -34,6 +34,14 @@ It writes `output/gk_heat_current_correlation_x.txt` or `_y.txt` with the
 integrals, and `output/gk_kappa_blocks_x.txt` or `_y.txt` with block estimates.
 The reported `GK Kappa J=0 2D` uses the correlation correction
 `I_QQ - I_QJ^2 / I_JJ`.
+
+With `--fermi-dirac`, initial particles and boundary-injected particles are
+sampled from Fermi-Dirac statistics at the configured sheet density. Scattering
+events include Pauli blocking through the final-state factor `1 - f(E_final)`.
+The chemical potential is found numerically from the actual 2D dispersion
+`E(p)` and the target sheet density.
+Without this flag, the original Boltzmann sampling and unblocked scattering are
+used.
 
 Reusable code for new materials:
 - `probable.hh` / `probable.cc`: EMC core, geometry, particle motion, boundary

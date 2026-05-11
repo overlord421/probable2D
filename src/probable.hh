@@ -83,12 +83,17 @@ struct Material {
   double cell_size;          // Lx / Nx
   double T_left, T_right;    // Температура на краях
   char thermal_axis;         // 'x' or 'y'
+  bool use_fermi_dirac;      // Fermi-Dirac instead of Boltzmann statistics
+  double carrier_density_2d; // sheet density for chemical potential
+  double spin_degeneracy;
   
   Material(double mx_, double my_, double Delta_ = 0, double Lx_ = 0, 
-           double Ly_ = 0, int Nx_ = 1, double T_l = 0, double T_r = 0, char axis_ = 'x') 
+           double Ly_ = 0, int Nx_ = 1, double T_l = 0, double T_r = 0, char axis_ = 'x',
+           bool use_fd_ = false, double carrier_density_2d_ = 0, double spin_degeneracy_ = 2) 
     : mx(mx_), my(my_), Delta(Delta_), Lx(Lx_), Ly(Ly_), Nx(Nx_), 
       cell_size((axis_ == 'y' ? Ly_ : Lx_) / Nx_), T_left(T_l), T_right(T_r),
-      thermal_axis(axis_ == 'y' ? 'y' : 'x') {}
+      thermal_axis(axis_ == 'y' ? 'y' : 'x'), use_fermi_dirac(use_fd_),
+      carrier_density_2d(carrier_density_2d_), spin_degeneracy(spin_degeneracy_) {}
   
   double energy(const Vec2 &p) const {
     // ϵ(p) = √((Δ p_x²)/m_x + (Δ + p_y²/(2m_y))²)
@@ -144,6 +149,12 @@ struct Material {
   double get_temperature(double coord) const {
     return T_left + (T_right - T_left) * (coord / axis_length());
   }
+
+  double effective_density_of_states_2d(double T) const;
+
+  double chemical_potential(double T) const;
+
+  double occupation(double E, double T) const;
 
   double mean_excess_energy_at_temperature(double T) const;
 

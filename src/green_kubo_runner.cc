@@ -177,9 +177,15 @@ GreenKuboRunResult run_green_kubo_simulation(const Material &material,
         for (size_t k = 0; k < mechanisms.size(); ++k) {
           free_flight[k] -= mechanisms[k]->rate(p, material.axis_coordinate(r)) * config.time_step;
           if (free_flight[k] < 0) {
-            p = mechanisms[k]->scatter(p);
+            Vec2 scattered = mechanisms[k]->scatter(p);
+            double final_occupation =
+                material.use_fermi_dirac ? material.occupation(material.energy(scattered), config.temperature) : 0;
+            bool accepted = !material.use_fermi_dirac || uniform() >= final_occupation;
+            if (accepted) {
+              p = scattered;
+              local_scattering_counts[k] += 1;
+            }
             free_flight[k] = -std::log(uniform());
-            local_scattering_counts[k] += 1;
             break;
           }
         }

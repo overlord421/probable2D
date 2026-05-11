@@ -59,6 +59,7 @@ int main(int argc, char const *argv[]) {
   char thermal_axis = 'x';
   bool tune_seebeck_field = false;
   bool green_kubo = false;
+  bool use_fermi_dirac = false;
   for (int i = 8; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "y" || arg == "Y" || arg == "axis=y") {
@@ -69,6 +70,8 @@ int main(int argc, char const *argv[]) {
       tune_seebeck_field = true;
     } else if (arg == "--green-kubo" || arg == "--gk" || arg == "green-kubo" || arg == "gk") {
       green_kubo = true;
+    } else if (arg == "--fermi-dirac" || arg == "--fd" || arg == "fermi-dirac" || arg == "fd") {
+      use_fermi_dirac = true;
     } else {
       std::cout << "Unknown optional argument: " << arg << "\n";
       return 1;
@@ -92,7 +95,9 @@ int main(int argc, char const *argv[]) {
     Nx, 
     material_T_left,
     material_T_right,
-    thermal_axis
+    thermal_axis,
+    use_fermi_dirac,
+    carrier_density_2d
   };
   
   // Вектор механизмов рассеяния
@@ -134,6 +139,10 @@ int main(int argc, char const *argv[]) {
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
   std::cout << "Seebeck fitting:  " << (tune_seebeck_field ? "on" : "off") << "\n";
   std::cout << "Green-Kubo mode:  " << (green_kubo ? "on" : "off") << "\n";
+  std::cout << "Statistics:       " << (use_fermi_dirac ? "Fermi-Dirac" : "Boltzmann") << "\n";
+  if (use_fermi_dirac) {
+    std::cout << "Chemical mu:      " << phosphorene.chemical_potential(green_kubo ? equilibrium_temperature : 0.5 * (T_left + T_right)) / units::eV << " eV\n";
+  }
   std::cout << "Magnetic field:   " << magnetic_field_z / units::T << " T\n";
   std::cout << "Scattering mechanisms:\n";
   for (size_t i = 0; i < mechanisms.size(); ++i) {
