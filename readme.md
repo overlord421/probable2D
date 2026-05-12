@@ -14,6 +14,9 @@ Run with optional thermal axis, open-circuit Seebeck field fitting, or
 equilibrium Green-Kubo kappa:
 `./phosphorene <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time> [axis] [--seebeck|--green-kubo] [--fermi-dirac]`
 
+Optional material overrides for parameter sweeps:
+`--density-cm2=... --optical-energy-mev=... --acoustic-da-ev=... --optical-do-ev-m=... --sound-velocity-ms=...`
+
 For `axis=x`, thermostats are placed at `x=0` and `x=Lx`, the temperature
 profile and heat flux are measured along `x`, and `y` is periodic. For
 `axis=y`, thermostats are placed at `y=0` and `y=Ly`, the profile and heat flux

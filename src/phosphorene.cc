@@ -47,7 +47,8 @@ int main(int argc, char const *argv[]) {
               << " <ensemble size> <T_left> <T_right> <Ex> <Ey> <Bz> <all_time>"
               << " [axis=x|y] [--seebeck|--green-kubo] [--fermi-dirac]"
               << " [--density-cm2=value] [--optical-energy-mev=value]"
-              << " [--acoustic-da-ev=value] [--optical-do-ev-m=value]\n";
+              << " [--acoustic-da-ev=value] [--optical-do-ev-m=value]"
+              << " [--sound-velocity-ms=value]\n";
     return 1;
   }
 
@@ -66,6 +67,7 @@ int main(int argc, char const *argv[]) {
   double run_acoustic_deformation_potential = acoustic_deformation_potential;
   double run_optical_deformation_potential = 5.67e10 * units::eV / units::m;
   double run_optical_phonon_energy = 56e-3 * units::eV;
+  double run_sound_velocity = sound_velocity;
   for (int i = 8; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "y" || arg == "Y" || arg == "axis=y") {
@@ -90,6 +92,9 @@ int main(int argc, char const *argv[]) {
     } else if (arg.rfind("--optical-do-ev-m=", 0) == 0) {
       std::string value = arg.substr(arg.find('=') + 1);
       run_optical_deformation_potential = parse<double>(value) * units::eV / units::m;
+    } else if (arg.rfind("--sound-velocity-ms=", 0) == 0) {
+      std::string value = arg.substr(arg.find('=') + 1);
+      run_sound_velocity = parse<double>(value) * units::m / units::s;
     } else {
       std::cout << "Unknown optional argument: " << arg << "\n";
       return 1;
@@ -124,7 +129,7 @@ int main(int argc, char const *argv[]) {
       phosphorene,
       density,
       run_acoustic_deformation_potential,
-      sound_velocity
+      run_sound_velocity
     ),
     new OpticalEmissionScattering(
       phosphorene,
@@ -156,6 +161,7 @@ int main(int argc, char const *argv[]) {
   }
   std::cout << "Carrier density:  " << run_carrier_density_2d * units::m * units::m / 1e4 << " cm^-2\n";
   std::cout << "Acoustic Da:      " << run_acoustic_deformation_potential / units::eV << " eV\n";
+  std::cout << "Sound velocity:   " << run_sound_velocity / units::m * units::s << " m/s\n";
   std::cout << "Optical Do:       " << run_optical_deformation_potential / units::eV * units::m << " eV/m\n";
   std::cout << "Optical phonon:   " << run_optical_phonon_energy / units::eV * 1e3 << " meV\n";
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
