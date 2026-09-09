@@ -17,6 +17,16 @@ equilibrium Green-Kubo kappa:
 Optional material overrides for parameter sweeps:
 `--density-cm2=... --optical-energy-mev=... --acoustic-da-ev=... --optical-do-ev-m=... --sound-velocity-ms=...`
 
+Multiple Gamma-point optical modes can be read from a whitespace-separated file:
+`--optical-modes-file=materials/phosphorene_gamma_optical_modes.txt`
+
+The optical modes file format is:
+`name energy_meV deformation_potential_eV_m`
+
+For each valid mode the code creates both optical emission and absorption
+scattering channels. Modes with non-positive energy or deformation potential
+are skipped.
+
 For `axis=x`, thermostats are placed at `x=0` and `x=Lx`, the temperature
 profile and heat flux are measured along `x`, and `y` is periodic. For
 `axis=y`, thermostats are placed at `y=0` and `y=Ly`, the profile and heat flux

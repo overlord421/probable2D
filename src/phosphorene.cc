@@ -1,6 +1,8 @@
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <gapped2d_scattering.hh>
 #include <green_kubo_runner.hh>
@@ -17,6 +19,12 @@ const double Ly = 300 * units::nm;
 const int Nx = 100; // количество бинов
 const double carrier_density_2d = 1e16 / units::m / units::m; // m^-2 -> um^-2
 
+struct OpticalMode {
+  std::string name;
+  double energy;
+  double deformation_potential;
+};
+
 template <typename T> T parse(const std::string &s) {
   std::stringstream ss(s);
   T result;
@@ -30,6 +38,33 @@ template <typename T> std::ostream &operator<<(std::ostream &s, std::vector<T> t
     s << t[i] << (i == t.size() - 1 ? "" : ", ");
   }
   return s << "]";
+}
+
+std::vector<OpticalMode> read_optical_modes_file(const std::string &path) {
+  std::ifstream file(path);
+  std::vector<OpticalMode> modes;
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#') {
+      continue;
+    }
+
+    std::stringstream ss(line);
+    std::string name;
+    double energy_mev = 0;
+    double deformation_potential_ev_m = 0;
+    ss >> name >> energy_mev >> deformation_potential_ev_m;
+    if (!ss || energy_mev <= 0 || deformation_potential_ev_m <= 0) {
+      continue;
+    }
+
+    modes.push_back({
+      name,
+      energy_mev * 1e-3 * units::eV,
+      deformation_potential_ev_m * units::eV / units::m
+    });
+  }
+  return modes;
 }
 
 template <typename T> T sum(std::vector<T> t) {
@@ -48,7 +83,8 @@ int main(int argc, char const *argv[]) {
               << " [axis=x|y] [--seebeck|--green-kubo] [--fermi-dirac]"
               << " [--density-cm2=value] [--optical-energy-mev=value]"
               << " [--acoustic-da-ev=value] [--optical-do-ev-m=value]"
-              << " [--sound-velocity-ms=value]\n";
+              << " [--sound-velocity-ms=value]"
+              << " [--optical-modes-file=path]\n";
     return 1;
   }
 
@@ -68,6 +104,7 @@ int main(int argc, char const *argv[]) {
   double run_optical_deformation_potential = 5.67e10 * units::eV / units::m;
   double run_optical_phonon_energy = 56e-3 * units::eV;
   double run_sound_velocity = sound_velocity;
+  std::string optical_modes_file;
   for (int i = 8; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "y" || arg == "Y" || arg == "axis=y") {
@@ -95,6 +132,8 @@ int main(int argc, char const *argv[]) {
     } else if (arg.rfind("--sound-velocity-ms=", 0) == 0) {
       std::string value = arg.substr(arg.find('=') + 1);
       run_sound_velocity = parse<double>(value) * units::m / units::s;
+    } else if (arg.rfind("--optical-modes-file=", 0) == 0) {
+      optical_modes_file = arg.substr(arg.find('=') + 1);
     } else {
       std::cout << "Unknown optional argument: " << arg << "\n";
       return 1;
@@ -122,6 +161,21 @@ int main(int argc, char const *argv[]) {
     use_fermi_dirac,
     run_carrier_density_2d
   };
+
+  std::vector<OpticalMode> optical_modes;
+  if (!optical_modes_file.empty()) {
+    optical_modes = read_optical_modes_file(optical_modes_file);
+    if (optical_modes.empty()) {
+      std::cout << "No valid optical modes in " << optical_modes_file << "\n";
+      return 1;
+    }
+  } else {
+    optical_modes.push_back({
+      "Gamma_default",
+      run_optical_phonon_energy,
+      run_optical_deformation_potential
+    });
+  }
   
   // Вектор механизмов рассеяния
   std::vector<Scattering *> mechanisms{
@@ -130,20 +184,22 @@ int main(int argc, char const *argv[]) {
       density,
       run_acoustic_deformation_potential,
       run_sound_velocity
-    ),
-    new OpticalEmissionScattering(
-      phosphorene,
-      density,
-      run_optical_deformation_potential, // TO2
-      run_optical_phonon_energy
-    ),
-    new OpticalAbsorptionScattering(
-      phosphorene,
-      density,
-      run_optical_deformation_potential, // TO2
-      run_optical_phonon_energy
     )
   };
+  for (const OpticalMode &mode : optical_modes) {
+    mechanisms.push_back(new OpticalEmissionScattering(
+      phosphorene,
+      density,
+      mode.deformation_potential,
+      mode.energy
+    ));
+    mechanisms.push_back(new OpticalAbsorptionScattering(
+      phosphorene,
+      density,
+      mode.deformation_potential,
+      mode.energy
+    ));
+  }
 
   double time_step = 1e-16 * units::s;
 
@@ -162,8 +218,14 @@ int main(int argc, char const *argv[]) {
   std::cout << "Carrier density:  " << run_carrier_density_2d * units::m * units::m / 1e4 << " cm^-2\n";
   std::cout << "Acoustic Da:      " << run_acoustic_deformation_potential / units::eV << " eV\n";
   std::cout << "Sound velocity:   " << run_sound_velocity / units::m * units::s << " m/s\n";
-  std::cout << "Optical Do:       " << run_optical_deformation_potential / units::eV * units::m << " eV/m\n";
-  std::cout << "Optical phonon:   " << run_optical_phonon_energy / units::eV * 1e3 << " meV\n";
+  if (!optical_modes_file.empty()) {
+    std::cout << "Optical modes:    " << optical_modes_file << "\n";
+  }
+  for (const OpticalMode &mode : optical_modes) {
+    std::cout << "  Optical " << mode.name
+              << ": " << mode.energy / units::eV * 1e3 << " meV, "
+              << mode.deformation_potential / units::eV * units::m << " eV/m\n";
+  }
   std::cout << "Electric field:   " << electric_field / units::V * units::m << " V/m\n";
   std::cout << "Seebeck fitting:  " << (tune_seebeck_field ? "on" : "off") << "\n";
   std::cout << "Green-Kubo mode:  " << (green_kubo ? "on" : "off") << "\n";

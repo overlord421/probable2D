@@ -1,0 +1,5 @@
+# name energy_meV deformation_potential_eV_m
+# Lines with non-positive energy or deformation_potential are skipped.
+# Add Gamma optical modes only when deformation potentials are known.
+Gamma_32meV 32 1.7e11
+Gamma_56meV 56 5.67e10
