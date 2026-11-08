@@ -2,6 +2,7 @@
 #include <iostream>
 #include <map>
 #include <random>
+#include <cstdlib>
 #if __has_include(<omp.h>)
 #include <omp.h>
 #endif
@@ -298,25 +299,34 @@ double Material::temperature_from_mean_flux_excess_energy(double mean_excess, do
 }
 
 Vec2 Scattering::scatter(const Vec2 &p) const {
-  // В 2D только угол φ
-  double phi = 2 * math::pi * uniform();
-  
-  double e = m.energy(p) - energy;
-  if (e <= m.Delta) {
+  double final_energy = m.energy(p) - energy;
+  if (final_energy < m.Delta) {
     return p;
   }
-  // нахожу p0, решая квадратное уравнение
-  double a = pow(sin(phi), 4) / (4 * pow(m.my, 2));
-  double b = m.Delta * (pow(cos(phi), 2) / m.mx + pow(sin(phi), 2) / m.my);
-  double c = -(pow(e, 2) - pow(m.Delta, 2));
-  if (std::fabs(a) < 1e-300) {
-    double p0 = std::sqrt(-c / b);
-    return {p0 * cos(phi), p0 * sin(phi)};
+  if (final_energy == m.Delta) {
+    return {0, 0};
   }
-  double D = pow(b, 2) - (4 * a * c);
-  double p0 = sqrt((sqrt(D) - b) / (2 * a));
-  
-  return {p0 * cos(phi), p0 * sin(phi)};
+
+  double excess = final_energy - m.Delta;
+  double energy_sum = final_energy + m.Delta;
+  double py_scale = std::sqrt(2 * m.my * excess);
+
+  // Parameterize the exact constant-energy contour by theta:
+  // py = sqrt(2 my (E - Delta)) sin(theta),
+  // px = sqrt(mx (E - Delta) [E + Delta + (E - Delta) sin^2(theta)] / Delta)
+  //      cos(theta).
+  // The measure delta(energy(p) - E) d^2p has theta density proportional to
+  // 1 / sqrt(E + Delta + (E - Delta) sin^2(theta)). Rejection sampling from
+  // uniform theta has acceptance at least 1 / sqrt(2) for E >= Delta > 0.
+  while (true) {
+    double theta = 2 * math::pi * uniform();
+    double sin_theta = std::sin(theta);
+    double contour_factor = energy_sum + excess * sin_theta * sin_theta;
+    if (uniform() < std::sqrt(energy_sum / contour_factor)) {
+      double px_scale = std::sqrt(m.mx * excess * contour_factor / m.Delta);
+      return {px_scale * std::cos(theta), py_scale * sin_theta};
+    }
+  }
 }
 
 void Results::append(uint32_t n, double t, const Vec2 &p, const Vec2 &v, double e, size_t s, double x, double q_flux, double n_flux) {
@@ -503,7 +513,11 @@ std::vector<Results> simulate(const Material &material,
 }
 
 double uniform() {
-  thread_local std::mt19937 generator(std::random_device{}());
+  thread_local std::mt19937 generator([] {
+    const char *seed = std::getenv("OPTICAL_RESPONSE_SEED");
+    return seed ? static_cast<unsigned>(std::strtoul(seed, nullptr, 10))
+                : std::random_device{}();
+  }());
   std::uniform_real_distribution<double> distribution(0, 1);
   return distribution(generator);
 }

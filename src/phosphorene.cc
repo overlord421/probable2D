@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <exception>
 #include <vector>
 
 #include <gapped2d_scattering.hh>
@@ -85,6 +86,10 @@ int main(int argc, char const *argv[]) {
               << " [--acoustic-da-ev=value] [--optical-do-ev-m=value]"
               << " [--sound-velocity-ms=value]"
               << " [--optical-modes-file=path]\n";
+    std::cout << "GK Pauli options: [--pauli=equilibrium|time-histogram]"
+              << " [--pauli-bins=24] [--pauli-prep-ns=16]"
+              << " [--pauli-passes=12] [--pauli-histories=64]\n";
+    std::cout << "Reuse a checked GK momentum map: [--pauli-map=path]\n";
     return 1;
   }
 
@@ -105,6 +110,11 @@ int main(int argc, char const *argv[]) {
   double run_optical_phonon_energy = 56e-3 * units::eV;
   double run_sound_velocity = sound_velocity;
   std::string optical_modes_file;
+  bool single_optical_mode_override = false;
+  bool pauli_time_histogram = false;
+  size_t pauli_bins = 24, pauli_passes = 12, pauli_histories = 64;
+  double pauli_preparation_time = 16e-9 * units::s;
+  std::string pauli_occupation_file;
   for (int i = 8; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "y" || arg == "Y" || arg == "axis=y") {
@@ -123,17 +133,38 @@ int main(int argc, char const *argv[]) {
     } else if (arg.rfind("--optical-energy-mev=", 0) == 0) {
       std::string value = arg.substr(arg.find('=') + 1);
       run_optical_phonon_energy = parse<double>(value) * 1e-3 * units::eV;
+      single_optical_mode_override = true;
     } else if (arg.rfind("--acoustic-da-ev=", 0) == 0) {
       std::string value = arg.substr(arg.find('=') + 1);
       run_acoustic_deformation_potential = parse<double>(value) * units::eV;
     } else if (arg.rfind("--optical-do-ev-m=", 0) == 0) {
       std::string value = arg.substr(arg.find('=') + 1);
       run_optical_deformation_potential = parse<double>(value) * units::eV / units::m;
+      single_optical_mode_override = true;
     } else if (arg.rfind("--sound-velocity-ms=", 0) == 0) {
       std::string value = arg.substr(arg.find('=') + 1);
       run_sound_velocity = parse<double>(value) * units::m / units::s;
     } else if (arg.rfind("--optical-modes-file=", 0) == 0) {
       optical_modes_file = arg.substr(arg.find('=') + 1);
+    } else if (arg == "--pauli=time-histogram") {
+      pauli_time_histogram = true;
+    } else if (arg == "--pauli=equilibrium") {
+      pauli_time_histogram = false;
+    } else if (arg.rfind("--pauli-bins=", 0) == 0) {
+      pauli_bins = parse<int>(arg.substr(arg.find('=') + 1));
+    } else if (arg.rfind("--pauli-prep-ns=", 0) == 0) {
+      pauli_preparation_time = parse<double>(arg.substr(arg.find('=') + 1)) * 1e-9 * units::s;
+    } else if (arg.rfind("--pauli-passes=", 0) == 0) {
+      pauli_passes = parse<int>(arg.substr(arg.find('=') + 1));
+    } else if (arg.rfind("--pauli-histories=", 0) == 0) {
+      pauli_histories = parse<int>(arg.substr(arg.find('=') + 1));
+    } else if (arg.rfind("--pauli-map=", 0) == 0) {
+      pauli_occupation_file = arg.substr(arg.find('=') + 1);
+      if (pauli_occupation_file.empty()) {
+        std::cerr << "Empty Pauli map path\n";
+        return 1;
+      }
+      pauli_time_histogram = true;
     } else {
       std::cout << "Unknown optional argument: " << arg << "\n";
       return 1;
@@ -141,6 +172,10 @@ int main(int argc, char const *argv[]) {
   }
   if (green_kubo && tune_seebeck_field) {
     std::cout << "--green-kubo and --seebeck are separate kappa estimators; choose one mode\n";
+    return 1;
+  }
+  if (pauli_time_histogram && (!green_kubo || !use_fermi_dirac)) {
+    std::cerr << "Time-histogram Pauli mode requires --green-kubo --fermi-dirac\n";
     return 1;
   }
 
@@ -169,12 +204,18 @@ int main(int argc, char const *argv[]) {
       std::cout << "No valid optical modes in " << optical_modes_file << "\n";
       return 1;
     }
-  } else {
+  } else if (single_optical_mode_override) {
     optical_modes.push_back({
       "Gamma_default",
       run_optical_phonon_energy,
       run_optical_deformation_potential
     });
+  } else {
+    // Fixed-response D11 from job 8576; ASR phonon energies from job 8568.
+    optical_modes = {
+      {"Gamma_mode_07", 41.786546532e-3 * units::eV, 5.802009891812528e10 * units::eV / units::m},
+      {"Gamma_mode_11", 54.464547517e-3 * units::eV, 5.598752616903092e10 * units::eV / units::m}
+    };
   }
   
   // Вектор механизмов рассеяния
@@ -249,10 +290,30 @@ int main(int argc, char const *argv[]) {
       equilibrium_temperature,
       "../output"
     };
-    GreenKuboRunResult result = run_green_kubo_simulation(phosphorene, mechanisms, config);
+    config.pauli_time_histogram = pauli_time_histogram;
+    config.pauli_bins = pauli_bins;
+    config.pauli_preparation_time = pauli_preparation_time;
+    config.pauli_preparation_passes = pauli_passes;
+    config.pauli_histories_per_pass = pauli_histories;
+    config.pauli_occupation_file = pauli_occupation_file;
+    GreenKuboRunResult result;
+    try {
+      result = run_green_kubo_simulation(phosphorene, mechanisms, config);
+    } catch (const std::exception &error) {
+      std::cerr << "Green-Kubo configuration error: " << error.what() << '\n';
+      return 1;
+    }
 
     std::cout << "\n===== Green-Kubo Results =====\n";
     std::cout << "      Directions: {ZZ, AC}\n";
+    if (pauli_time_histogram) {
+      std::cout << "Pauli occupation:   frozen time histogram, " << pauli_bins << " x " << pauli_bins << '\n';
+      std::cout << "Pauli outside mass: " << result.pauli_histogram_outside_fraction << '\n';
+      std::cout << "Pauli density / n:  " << result.pauli_histogram_clipped_density_fraction << '\n';
+      std::cout << "Pauli saturated cells: " << result.pauli_histogram_saturated_cells << '\n';
+      if (!pauli_occupation_file.empty())
+        std::cout << "Pauli map source:   " << pauli_occupation_file << '\n';
+    }
     std::cout << "Correlation samples: " << result.samples << "\n";
     std::cout << "Correlation lags:    " << result.correlation_lags << "\n";
     std::cout << "Mean heat flux:      " << result.heat_flux_2d << " W/m (2D sheet)\n";

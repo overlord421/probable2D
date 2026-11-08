@@ -17,8 +17,30 @@ equilibrium Green-Kubo kappa:
 Optional material overrides for parameter sweeps:
 `--density-cm2=... --optical-energy-mev=... --acoustic-da-ev=... --optical-do-ev-m=... --sound-velocity-ms=...`
 
-Multiple Gamma-point optical modes can be read from a whitespace-separated file:
-`--optical-modes-file=materials/phosphorene_gamma_optical_modes.txt`
+The default scattering set is acoustic deformation-potential scattering plus
+two intraband Gamma optical modes, each with emission and absorption:
+
+| Mode | Energy (meV) | Absolute deformation potential (eV/m) |
+| --- | ---: | ---: |
+| 7 | 41.786546532 | 5.802009891812528e10 |
+| 11 | 54.464547517 | 5.598752616903092e10 |
+
+The optical constants are fixed-response band-11 elements from QE job 8576;
+energies use the fixed-occupation crystal-ASR frequencies from job 8568.
+Both constants agree with converged frozen-phonon slopes within 0.11%.
+This is the selected two-mode approximation to intraband scattering;
+finite-q and interband transport are outside this parameterization.
+The acoustic default is 4.9 eV and remains independently configurable.
+All nine optical-mode results are retained in
+`qe_phosphorene_gamma/dfpt_fixed_dvscf_tetraopt_run_8575/`.
+
+The same two-mode set is saved in `materials/phosphorene_gamma_optical_modes.txt`.
+A mode file replaces the default set. When running from `src/`, use:
+`--optical-modes-file=../materials/phosphorene_gamma_optical_modes.txt`
+
+Explicit `--optical-energy-mev` or `--optical-do-ev-m` selects the legacy
+single-mode override; its unspecified value retains 56 meV or 5.67e10 eV/m,
+respectively. An explicit mode file takes precedence over these overrides.
 
 The optical modes file format is:
 `name energy_meV deformation_potential_eV_m`
@@ -56,6 +78,33 @@ The chemical potential is found numerically from the actual 2D dispersion
 Without this flag, the original Boltzmann sampling and unblocked scattering are
 used.
 
+Default working algorithm: the estimator of article run 8513, with
+exact conditional energy-surface sampling and the previous tagged-electron
+Green-Kubo estimator. On 2026-10-06 the user requested postponing the new
+FD response algorithm; its source, checks and figures remain archived in
+`transport_runs/article_linear_fd_N8_20261006_863743c/`. Those results are
+not the selected working baseline. The optical defaults now use the two-mode
+QE parameterization above; theoretical estimator validation remains open.
+
+For homogeneous zero-field FD Green-Kubo, `--pauli=time-histogram` enables
+occupation estimated from preparation trajectories sampled at fixed time
+intervals. The histories run sequentially, independently of production
+ensemble size. FD initializes particles and the first preparation pass;
+later passes use a frozen empirical momentum map, with vacancy-damped
+updates between passes. Production uses the final frozen map. The old
+correlation formulas, carrier-density normalization and scattering rates
+are unchanged. The default remains `--pauli=equilibrium`.
+
+Preparation controls: `--pauli-bins=24`, `--pauli-prep-ns=16` (total time),
+`--pauli-passes=12`, `--pauli-histories=64` (sequential histories per pass).
+The output includes `pauli_preparation_x.tsv` / `_y.tsv` and
+`pauli_occupation_x.tsv` / `_y.tsv`, including raw and used occupations,
+FD cell-average reference, map changes, overflow and density diagnostics.
+Unresolved preparation stops before measuring correlations. Grid/time
+convergence remains necessary for quantitative use; these preparation
+checks alone do not establish transport accuracy. See
+`transport_runs/pauli_time_histogram_20261006/METHOD.md`.
+
 Reusable code for new materials:
 - `probable.hh` / `probable.cc`: EMC core, geometry, particle motion, boundary
   thermostats, and generic `Scattering` interface.
@@ -83,3 +132,33 @@ deviation of 2D kappa across ensemble trajectories.
 Optical phonon scattering includes both emission and absorption with Bose
 factors, and boundary injection diagnostics use flux-weighted temperature
 reconstruction.
+
+For zero-field preparation, observations are shared between the four momentum
+reflection partners without changing their total dwell time. Bare rates are
+cached between accepted collisions, retaining the original step hazards.
+Both production axes can reuse the same checked map via
+`--pauli-map=/absolute/path/pauli_occupation_x.tsv --pauli-bins=N`. Loading
+checks cell geometry, FD reference/material, density/state capacity, overflow
+and reflection symmetry; it skips preparation and freezes the supplied map.
+
+## Article driver for linearized Fermi–Dirac response
+
+Build and run from the repository root.
+
+```sh
+run_dir=transport_runs/mc_article_density_20261020
+c++ -O2 -std=c++17 -Isrc "$run_dir/optical_response.cc" src/probable.cc \
+  -o "$run_dir/optical_response"
+OPTICAL_RESPONSE_SEED=5102400 "$run_dir/optical_response" 2e13 131072 "$run_dir/modes_7_11.txt"
+```
+
+The arguments are sheet density in cm⁻², number of histories, and the mode
+file. The JSON output includes the correlation integrals from both complete
+event trajectories and conditional averaging. The article uses the
+`conditional_moments` integrals. Setting `OPTICAL_RESPONSE_SEED` reproduces the
+seed used by the archived driver. The generator uses a random seed by default.
+
+Run `python3 transport_runs/mc_article_density_20261020/run_density.py` from a
+fresh checkout to generate the five density series with their recorded seeds.
+The script writes results under the driver's directory and requires new
+case directories.

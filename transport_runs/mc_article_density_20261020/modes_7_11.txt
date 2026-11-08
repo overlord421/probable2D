@@ -1,0 +1,7 @@
+# name energy_meV deformation_potential_eV_m
+# Selected intraband Gamma modes: fixed-response D11 from QE job 8576.
+# Positive absolute D values use the RMS atomic-displacement convention.
+# Energies: job 8568 fixed-occupation frequencies with crystal ASR, h*f.
+# Full nine-mode matrix remains in qe_phosphorene_gamma/dfpt_fixed_dvscf_tetraopt_run_8575/.
+Gamma_mode_07 41.786546532 5.802009891812528e10
+Gamma_mode_11 54.464547517 5.598752616903092e10
